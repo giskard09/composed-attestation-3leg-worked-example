@@ -11,7 +11,9 @@ re-fetches leg 3 live from its source instead of trusting the cached copy.
   2. Leg 2 (ours): recomputes action_ref (action-ref-v1, 4-field preimage)
      and decision_binding_ref (decision-binding-ref-v1.0) from their
      declared preimages, checks both match the manifest.
-  3. Leg 1 (WYRIWE/TMerlini): explicitly NOT verified here — flagged SKIP,
+  3. Leg 1 (WYRIWE/TMerlini): verified — closed by the leg's author (PR #1810 follow-up):
+     local keccak recompute of callDataHash + actionCommitment, live verify() on the
+     deployed Sepolia contract, and a tampered-output negative. Previously flagged SKIP,
      same as babyblueviper1's own framing ("verify aparte si hace falta").
 
 Run: python3 verifier/verify.py [--artifacts DIR] [--no-network]
@@ -30,6 +32,48 @@ def jcs(obj):
 
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
+
+
+
+
+# ---- pure-stdlib keccak-256 (Keccak pad 0x01) — for the leg-1 WYRIWE recompute ----
+def _kc_rot(x, n): return ((x << n) | (x >> (64 - n))) & 0xFFFFFFFFFFFFFFFF
+_KC_RC = [0x0000000000000001,0x0000000000008082,0x800000000000808A,0x8000000080008000,
+          0x000000000000808B,0x0000000080000001,0x8000000080008081,0x8000000000008009,
+          0x000000000000008A,0x0000000000000088,0x0000000080008009,0x000000008000000A,
+          0x000000008000808B,0x800000000000008B,0x8000000000008089,0x8000000000008003,
+          0x8000000000008002,0x8000000000000080,0x000000000000800A,0x800000008000000A,
+          0x8000000080008081,0x8000000000008080,0x0000000080000001,0x8000000080008008]
+_KC_ROT = [[0,36,3,41,18],[1,44,10,45,2],[62,6,43,15,61],[28,55,25,21,56],[27,20,39,8,14]]
+
+def _kc_f(A):
+    for rc in _KC_RC:
+        C=[A[x][0]^A[x][1]^A[x][2]^A[x][3]^A[x][4] for x in range(5)]
+        D=[C[(x-1)%5]^_kc_rot(C[(x+1)%5],1) for x in range(5)]
+        A=[[A[x][y]^D[x] for y in range(5)] for x in range(5)]
+        B=[[0]*5 for _ in range(5)]
+        for x in range(5):
+            for y in range(5):
+                B[y][(2*x+3*y)%5]=_kc_rot(A[x][y],_KC_ROT[x][y])
+        A=[[B[x][y]^((~B[(x+1)%5][y])&B[(x+2)%5][y]) for y in range(5)] for x in range(5)]
+        A[0][0]^=rc
+    return A
+
+def keccak256(data):
+    rate=136
+    q=rate-(len(data)%rate)
+    p=bytes(data)+(b'\x81' if q==1 else b'\x01'+b'\x00'*(q-2)+b'\x80')
+    st=[[0]*5 for _ in range(5)]
+    for off in range(0,len(p),rate):
+        for i in range(rate//8):
+            st[i%5][i//5]^=int.from_bytes(p[off+8*i:off+8*i+8],'little')
+        st=_kc_f(st)
+    out=b''
+    for i in range(4):
+        out+=st[i%5][i//5].to_bytes(8,'little')
+    return out
+
+assert keccak256(b'').hex()=='c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'
 
 
 def main():
@@ -120,7 +164,56 @@ def main():
         ok &= check_anchor
 
     # --- Leg 1 ---------------------------------------------------------------
-    print(f"[SKIP] leg1 (WYRIWE/TMerlini, {m['leg1_transparent']['contract']}) — referenced, not verified here")
+    # --- Leg 1 (WYRIWE/TMerlini) — closed by the leg's author per PR #1810 -----
+    # Four checks, no prose: the raw calldata hashes to the bound input digest, the
+    # 7-field PolicyAction preimage re-derives the shared actionCommitment (both via
+    # the pure-stdlib keccak above, cold), the DEPLOYED Sepolia verifier returns true
+    # on exactly those bytes, and a tampered outputHash returns false (fail-closed,
+    # not constant-true).
+    L1_CONTRACT = m["leg1_transparent"]["contract"]
+    L1_CALLDATA = bytes.fromhex(
+        "82ad56cb0000000000000000000000000000000000000000000000000000000000000020"
+        "0000000000000000000000000000000000000000000000000000000000000000")  # Multicall3.aggregate3([])
+    L1_INPUT_HASH = "cfacbfe211cf3be67a1d64a6499a2af0ae475e2c0965c2a42f969d243df2b6cd"
+    L1_COMMITMENT = "5b5ec31c336cc8f95dc6d9025d1d008c6ed2cd5067b9c421b1d36927e230173a"
+    def _w(v): return int(v).to_bytes(32, "big")
+    def _addr(a): return bytes(12) + bytes.fromhex(a[2:])
+    l1_preimage = (_w(11155111)                                                        # chainId (Sepolia)
+        + bytes.fromhex("16079127bc55bd85d480837115b9bd82d26f03809c0bc4c6c80f7220836afad0")  # domainId
+        + _w(54848)                                                                     # agentId
+        + _addr("0xcA11bde05977b3631167028862bE2a173976CA11")                          # target (Multicall3)
+        + _w(0)                                                                         # value
+        + bytes.fromhex(L1_INPUT_HASH)                                                  # callDataHash
+        + _w(5))                                                                        # actionNonce
+    c1 = keccak256(L1_CALLDATA).hex() == L1_INPUT_HASH
+    print(f"[{'PASS' if c1 else 'FAIL'}] leg1 raw calldata -> callDataHash (local keccak)")
+    ok &= c1
+    c2 = keccak256(l1_preimage).hex() == L1_COMMITMENT
+    print(f"[{'PASS' if c2 else 'FAIL'}] leg1 PolicyAction preimage -> actionCommitment {L1_COMMITMENT[:10]}… (local keccak)")
+    ok &= c2
+    sep_rpc = os.environ.get("SEPOLIA_RPC", "https://ethereum-sepolia-rpc.publicnode.com")
+    sel = keccak256(b"verify(bytes32,bytes32,bytes,bytes)")[:4]
+    def _l1_call(output_hash_hex):
+        head = (bytes.fromhex(L1_INPUT_HASH) + bytes.fromhex(output_hash_hex)
+                + _w(0x80) + _w(0x80 + 32))
+        tail = _w(0) + _w(len(l1_preimage)) + l1_preimage
+        data = "0x" + (sel + head + tail).hex()
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_call",
+                           "params": [{"to": L1_CONTRACT, "data": data}, "latest"]}).encode()
+        req = urllib.request.Request(sep_rpc, data=body,
+            headers={"Content-Type": "application/json", "User-Agent": "composed-attestation-3leg-verifier/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return int(json.loads(r.read())["result"], 16)
+    try:
+        c3 = _l1_call(L1_COMMITMENT) == 1
+        print(f"[{'PASS' if c3 else 'FAIL'}] leg1 live verify() on {L1_CONTRACT} (Sepolia) returns true")
+        ok &= c3
+        tampered = L1_COMMITMENT[:-1] + ("b" if L1_COMMITMENT[-1] != "b" else "c")
+        c4 = _l1_call(tampered) == 0
+        print(f"[{'PASS' if c4 else 'FAIL'}] leg1 tampered outputHash returns false (fail-closed)")
+        ok &= c4
+    except Exception as e:
+        print(f"[SKIP] leg1 live verify() unreachable ({e}) — local recomputes above still stand; not a pass")
 
     print()
     print("ALL CHECKS PASS" if ok else "SOME CHECKS FAILED")

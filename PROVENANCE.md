@@ -50,6 +50,10 @@ block 49623528.**
 - Not a claim that babyblueviper1, invinoveritas, or TMerlini endorse this
   composition — it applies our own specs to a real, independently
   recomputed third-party reference, nothing more.
-- Not a claim that leg 1 (WYRIWE) is correct or verified — we did not check
-  it. Anyone relying on this repo for leg 1 should verify it themselves
-  against the live Sepolia contract.
+- Leg 1 (WYRIWE) is now verified IN the verifier — the checks were contributed
+  by the leg's own author (TMerlini, per the ERCs PR #1810 thread), which is
+  disclosed deliberately: they are four mechanical checks (pure-stdlib keccak
+  recompute of callDataHash and actionCommitment, a live verify() call on the
+  deployed Sepolia contract, and a tampered-output negative), so their force
+  comes from re-running them, not from who wrote them. The original repo
+  authors still made no claim about leg 1; run the verifier and it tells you.
