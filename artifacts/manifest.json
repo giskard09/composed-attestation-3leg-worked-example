@@ -1,0 +1,76 @@
+{
+  "fixture_id": "composed-attestation-3leg-worked-example",
+  "leg1_transparent": {
+    "chain": "Sepolia (11155111)",
+    "contract": "0x3f98686f2D286A95435BA5916ec663219BE387Ad",
+    "label": "WYRIWE (TMerlini) \u2014 confidential/transparent leg",
+    "note": "Referenced only, per babyblueviper1's own framing (EthMagicians t/28083 post #153). Not captured or recomputed by this script \u2014 verify independently against the live contract if/when needed.",
+    "produced_by_us": false,
+    "verified_by_us": false
+  },
+  "leg2_ours": {
+    "action_preimage": {
+      "action_type": "composed-attestation.review",
+      "agent_id": "worked-example.composed-attestation-3leg",
+      "scope": "mycelium:composed-demo:artifact:bdb4d93c421d54883a0c31821d37d197a91a972062be28babed3599dcf2fbdb3",
+      "timestamp": "2026-08-06T00:00:00.000Z"
+    },
+    "action_ref": "sha256:86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
+    "decision_binding_payload": {
+      "action_ref": "sha256:86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
+      "context_digest": "sha256:5bca0bf044c8e1c8e16a01bf3ee44b12c305ce6a50dd9789ff73cbd13482b9b9",
+      "decision_at_ms": 1785802284000,
+      "decision_id": "invinoveritas-ledger-236"
+    },
+    "decision_binding_ref": "sha256:9bcf2a9c4937a589012e036f4e58a38f138f80528d5cb6c32e913c8b03e34050",
+    "spec_action_ref": "action-ref-v1 (argentum-core, docs/spec/action-ref.md)",
+    "spec_decision_binding_ref": "decision-binding-ref-v1.0 (argentum-core, docs/spec/decision-binding-ref-v1.0.md)"
+  },
+  "leg3_attested": {
+    "decision_ref": "sha256:5bca0bf044c8e1c8e16a01bf3ee44b12c305ce6a50dd9789ff73cbd13482b9b9",
+    "fetched_at_utc": "2026-08-06",
+    "match": true,
+    "preimage": {
+      "artifact_hash": "bdb4d93c421d54883a0c31821d37d197a91a972062be28babed3599dcf2fbdb3",
+      "artifact_type": "onchain_action",
+      "intended_audience": null,
+      "policy_version": "invinoveritas.review.v7",
+      "related_decision_ref": null,
+      "source_class": "agent_reported",
+      "vantage_limitation": "source_class=agent_reported: nothing external confirms this /review call happened, or could not be bypassed, before the action it governs. Recomputability makes this record internally consistent (an occurrence claim) \u2014 it is not an absence/completeness claim, which needs a vantage the acting agent doesn't control. Sufficient as standalone evidence for a reversible action; for an irreversible or privileged action, treat this proof as advisory input, not standalone authorization, until paired with an independent mediation-point integration.",
+      "verdict": "reject"
+    },
+    "recomputed_locally": "sha256:5bca0bf044c8e1c8e16a01bf3ee44b12c305ce6a50dd9789ff73cbd13482b9b9",
+    "source": "https://api.babyblueviper.com/ledger/236",
+    "verdict": {
+      "artifact_hash": "bdb4d93c421d54883a0c31821d37d197a91a972062be28babed3599dcf2fbdb3",
+      "artifact_type": "onchain_action",
+      "confidence": 0.84,
+      "conformance_suite": "https://github.com/babyblueviper1/preaction-governance-conformance",
+      "decision_ref": "sha256:5bca0bf044c8e1c8e16a01bf3ee44b12c305ce6a50dd9789ff73cbd13482b9b9",
+      "decision_ref_preimage_fields": [
+        "artifact_hash",
+        "artifact_type",
+        "policy_version",
+        "verdict",
+        "source_class",
+        "vantage_limitation",
+        "related_decision_ref",
+        "intended_audience"
+      ],
+      "decision_ref_preimage_rule": "every name in decision_ref_preimage_fields is a key in the hashed preimage object, always -- absent fields (e.g. vantage_limitation when not applicable) are present as JSON null, never omitted from the object.",
+      "engine_generation": 1,
+      "key_id": "6786e18a864893a900bd9858e650f67ccc3513f248fed374b591e2ff6922fbb7",
+      "platform": "invinoveritas",
+      "policy_version": "invinoveritas.review.v7",
+      "schema": "invinoveritas.verdict_proof.v1",
+      "source_class": "agent_reported",
+      "vantage_limitation": "source_class=agent_reported: nothing external confirms this /review call happened, or could not be bypassed, before the action it governs. Recomputability makes this record internally consistent (an occurrence claim) \u2014 it is not an absence/completeness claim, which needs a vantage the acting agent doesn't control. Sufficient as standalone evidence for a reversible action; for an irreversible or privileged action, treat this proof as advisory input, not standalone authorization, until paired with an independent mediation-point integration.",
+      "verdict": "reject",
+      "verified_at": 1785802284
+    }
+  },
+  "provenance": "Worked example, unpublished draft. Leg 3 is real (invinoveritas ledger #236, verbatim, recomputed byte-exact). Leg 2 is our own spec applied to a synthetic demo action bound to the same artifact_hash -- not a real production trail. Leg 1 is referenced from babyblueviper1's own framing, not produced or verified here. No claim of endorsement or integration by babyblueviper1, invinoveritas, or TMerlini beyond what each party has stated publicly in EthMagicians t/28083.",
+  "shared_artifact_hash": "bdb4d93c421d54883a0c31821d37d197a91a972062be28babed3599dcf2fbdb3",
+  "thread": "ethresear.ch / ethereum-magicians t/28083 (ERC-8274)"
+}
