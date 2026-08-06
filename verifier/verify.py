@@ -69,8 +69,8 @@ def main():
 
     # --- Leg 2 -------------------------------------------------------------
     leg2 = m["leg2_ours"]
-    recomputed_action_ref = "sha256:" + sha256_hex(jcs(leg2["action_preimage"]))
-    check2a = recomputed_action_ref == leg2["action_ref"]
+    recomputed_action_ref = sha256_hex(jcs(leg2["action_preimage"]))
+    check2a = recomputed_action_ref == leg2["action_ref"] == leg2["anchor_ref_bytes32"][2:]
     print(f"[{'PASS' if check2a else 'FAIL'}] leg2 action_ref recompute            : {recomputed_action_ref}")
     ok &= check2a
 
@@ -81,6 +81,43 @@ def main():
     check2b = recomputed_dbr == leg2["decision_binding_ref"]
     print(f"[{'PASS' if check2b else 'FAIL'}] leg2 decision_binding_ref recompute  : {recomputed_dbr}")
     ok &= check2b
+
+    # --- Leg 2 on-chain anchor ------------------------------------------------
+    ref = leg2["anchor_ref_bytes32"]
+    try:
+        with open(os.path.join(art, "anchor.json")) as f:
+            anchor = json.load(f)
+    except FileNotFoundError:
+        anchor = None
+        print("[SKIP] no anchor.json yet — action_ref not anchored on-chain")
+
+    if anchor and not args.no_network:
+        hint = int(anchor["block"])
+        rpc_url = anchor.get("rpc", "https://mainnet.base.org")
+        req = urllib.request.Request(
+            rpc_url,
+            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []}).encode(),
+            headers={"Content-Type": "application/json", "User-Agent": "composed-attestation-3leg-verifier/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            head = int(json.loads(r.read())["result"], 16)
+        from_block = hex(max(0, hint - 25))
+        to_block = hex(min(hint + 25, head))
+        ANCHORED_TOPIC0 = "0xfe2289542f7a0110ac112c3a4d712afdcaaf2900a1326f4e6f340b563a0e8734"
+        body = json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "eth_getLogs",
+            "params": [{"address": anchor["registry"], "fromBlock": from_block, "toBlock": to_block,
+                        "topics": [ANCHORED_TOPIC0, ref]}],
+        }).encode()
+        req = urllib.request.Request(rpc_url, data=body, headers={"Content-Type": "application/json", "User-Agent": "composed-attestation-3leg-verifier/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            logs = json.loads(r.read())["result"]
+        check_anchor = bool(logs)
+        print(f"[{'PASS' if check_anchor else 'FAIL'}] leg2 on-chain Anchored event : {anchor['registry']} ({anchor.get('chain','?')})")
+        if logs:
+            print(f"         tx    : {logs[0]['transactionHash']}")
+            print(f"         block : {int(logs[0]['blockNumber'], 16)}")
+        ok &= check_anchor
 
     # --- Leg 1 ---------------------------------------------------------------
     print(f"[SKIP] leg1 (WYRIWE/TMerlini, {m['leg1_transparent']['contract']}) — referenced, not verified here")

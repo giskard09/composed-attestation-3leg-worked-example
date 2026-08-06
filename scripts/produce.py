@@ -89,6 +89,13 @@ action_preimage = {
     "scope": f"mycelium:composed-demo:artifact:{SHARED_ARTIFACT_HASH}",
     "timestamp": timestamp,
 }
+# action_ref (action-ref-v1 canonical form): plain hex, no prefix — this is
+# what gets anchored as bytes32. Confirmed against argentum-core's own
+# reference implementation (plugins/agt_evidence_anchor/action_ref.py) and
+# every other *-action-ref-anchor worked example (r0x, machinefi, etc.) —
+# none of them prefix it. Only decision-binding-ref-v1.0 wraps it with a
+# "sha256:" prefix when embedding it in ITS OWN preimage (spec example,
+# decision-binding-ref-v1.0.md line 77).
 action_ref = sha256_hex(jcs(action_preimage))
 
 decision_binding_payload = {
@@ -105,7 +112,8 @@ leg2 = {
     "spec_action_ref": "action-ref-v1 (argentum-core, docs/spec/action-ref.md)",
     "spec_decision_binding_ref": "decision-binding-ref-v1.0 (argentum-core, docs/spec/decision-binding-ref-v1.0.md)",
     "action_preimage": action_preimage,
-    "action_ref": "sha256:" + action_ref,
+    "action_ref": action_ref,
+    "anchor_ref_bytes32": "0x" + action_ref,
     "decision_binding_payload": decision_binding_payload,
     "decision_binding_ref": decision_binding_ref,
 }
@@ -158,5 +166,6 @@ with open(os.path.join(OUT_DIR, "manifest.json"), "w") as f:
 print("=== composed-attestation-3leg-worked-example : producer ===")
 print(f"leg3 decision_ref recompute match : {manifest['leg3_attested']['match']}")
 print(f"leg2 action_ref                   : {leg2['action_ref']}")
+print(f"leg2 anchor_ref_bytes32            : {leg2['anchor_ref_bytes32']}")
 print(f"leg2 decision_binding_ref         : {leg2['decision_binding_ref']}")
 print(f"wrote {OUT_DIR}/manifest.json")

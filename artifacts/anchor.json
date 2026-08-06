@@ -1,0 +1,8 @@
+{
+  "block": 49623528,
+  "chain": "Base mainnet (chainId 8453)",
+  "ref": "0x86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
+  "registry": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+  "rpc": "https://mainnet.base.org",
+  "tx_hash": "0x723b18539f186c1b6dd904d51f832f6d3d103c4daef2f8e29590ec8d10dda353"
+}

@@ -1,6 +1,8 @@
 # Provenance
 
-**Status: draft, unpublished, not anchored.**
+**Status: published. Leg 2's `action_ref` anchored on Base mainnet, tx
+`0x723b18539f186c1b6dd904d51f832f6d3d103c4daef2f8e29590ec8d10dda353`,
+block 49623528.**
 
 ## Leg 3 — babyblueviper1 / invinoveritas ledger #236
 
@@ -48,4 +50,6 @@
 - Not a claim that babyblueviper1, invinoveritas, or TMerlini endorse this
   composition — it applies our own specs to a real, independently
   recomputed third-party reference, nothing more.
-- Not anchored on-chain yet. Not published. Not posted to ERCs t/28083.
+- Not a claim that leg 1 (WYRIWE) is correct or verified — we did not check
+  it. Anyone relying on this repo for leg 1 should verify it themselves
+  against the live Sepolia contract.

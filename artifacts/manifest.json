@@ -15,7 +15,8 @@
       "scope": "mycelium:composed-demo:artifact:bdb4d93c421d54883a0c31821d37d197a91a972062be28babed3599dcf2fbdb3",
       "timestamp": "2026-08-06T00:00:00.000Z"
     },
-    "action_ref": "sha256:86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
+    "action_ref": "86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
+    "anchor_ref_bytes32": "0x86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
     "decision_binding_payload": {
       "action_ref": "sha256:86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2",
       "context_digest": "sha256:5bca0bf044c8e1c8e16a01bf3ee44b12c305ce6a50dd9789ff73cbd13482b9b9",

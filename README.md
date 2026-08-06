@@ -1,7 +1,8 @@
 # composed-attestation-3leg-worked-example
 
-**DRAFT — not published, not anchored. Internal review before responding in
-ERCs t/28083.**
+Leg 2's `action_ref` is anchored on Base mainnet:
+[`0x723b18539f186c1b6dd904d51f832f6d3d103c4daef2f8e29590ec8d10dda353`](https://basescan.org/tx/0x723b18539f186c1b6dd904d51f832f6d3d103c4daef2f8e29590ec8d10dda353)
+(block 49623528, `AnchorRegistry` `0x49fEcA52bC634a9Ab773226D16619deC547794aa`).
 
 A worked example composing three independently verifiable references, each
 covering a different vantage on the same `artifact_hash`
@@ -36,22 +37,33 @@ checkable.
 
 ```bash
 python3 scripts/produce.py artifacts
+# anchor.sh needs OWNER_PRIVATE_KEY in env, not committed:
+BASE_RPC=https://mainnet.base.org bash scripts/anchor.sh
 python3 verifier/verify.py
 ```
 
-## Open, before this goes anywhere public
+## The anchor
 
-- Leg 2 today uses a synthetic demo action (`composed-attestation.review`)
-  bound to entry #236's `artifact_hash`, reusing the existing verdict per
-  babyblueviper1's own offer ("no hace falta reusar el #236"). A purpose-built
-  fresh verdict against an `artifact_hash` we mint ourselves is the other
-  option they offered — not requested yet.
-- Not anchored on-chain. If this composition gets a green light, leg 2's
-  `action_ref` anchors into `AnchorRegistry`
-  (`0x49fEcA52bC634a9Ab773226D16619deC547794aa`) same as every other worked
-  example — no new infra needed.
+- **Registry:** `0x49fEcA52bC634a9Ab773226D16619deC547794aa` (same CREATE2
+  address on Base 8453, Arbitrum One 42161, Ink 57073).
+- **Function:** `anchor(bytes32 ref)` — permissionless, no owner/roles/funds.
+- **Leg 2's `action_ref`:** `86f1690e20a214faa9c0755a3cba860592c07d68c9312fdd6bc464de4b2c7fb2`
+- **Tx:** `0x723b18539f186c1b6dd904d51f832f6d3d103c4daef2f8e29590ec8d10dda353`, block 49623528, Base mainnet.
+- Leg 3's `decision_ref` is not separately anchored here — it already lives
+  on invinoveritas's own Nostr-backed ledger (entry #236), independently
+  checkable there.
+- Leg 1 (WYRIWE) is not touched by this repo at all.
+
+## Scope, explicit
+
+- Leg 2 uses a synthetic demo action (`composed-attestation.review`) bound
+  to entry #236's `artifact_hash`, reusing the existing verdict per
+  babyblueviper1's own offer ("that's a real decision_ref to slot in") —
+  decided over requesting a purpose-built fresh verdict, which they also
+  offered as an option.
 - No outreach to TMerlini for leg 1 — referenced from babyblueviper1's own
-  post, not confirmed independently by us.
+  post, not confirmed independently by us. Do not read anything in this
+  repo as vouching for leg 1's correctness.
 
 ## Licenses
 
