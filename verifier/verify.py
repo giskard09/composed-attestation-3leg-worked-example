@@ -193,11 +193,24 @@ def main():
     ok &= c2
     sep_rpc = os.environ.get("SEPOLIA_RPC", "https://ethereum-sepolia-rpc.publicnode.com")
     sel = keccak256(b"verify(bytes32,bytes32,bytes,bytes)")[:4]
+    def _pad32(b):
+        return b + b"\x00" * ((-len(b)) % 32)
     def _l1_call(output_hash_hex):
+        # ABI-encode verify(bytes32 inputHash, bytes32 outputHash, bytes calldata_, bytes context).
+        # BUG (found in code review, fixed here): the previous version hardcoded the
+        # calldata_ dynamic argument's length word to 0 and never appended L1_CALLDATA
+        # itself — the on-chain call was silently checking verify() against an EMPTY
+        # calldata_, not the real Multicall3.aggregate3([]) bytes whose hash is
+        # L1_INPUT_HASH. c3/c4 would have PASSED against the wrong input. Fixed: encode
+        # calldata_'s real length + padded bytes, and compute context's offset from
+        # calldata_'s actual (padded) size instead of assuming it's empty.
+        calldata_tail = _w(len(L1_CALLDATA)) + _pad32(L1_CALLDATA)
+        context_tail = _w(len(l1_preimage)) + _pad32(l1_preimage)
+        offset_calldata = 0x80  # 4 head words
+        offset_context = offset_calldata + len(calldata_tail)
         head = (bytes.fromhex(L1_INPUT_HASH) + bytes.fromhex(output_hash_hex)
-                + _w(0x80) + _w(0x80 + 32))
-        tail = _w(0) + _w(len(l1_preimage)) + l1_preimage
-        data = "0x" + (sel + head + tail).hex()
+                + _w(offset_calldata) + _w(offset_context))
+        data = "0x" + (sel + head + calldata_tail + context_tail).hex()
         body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_call",
                            "params": [{"to": L1_CONTRACT, "data": data}, "latest"]}).encode()
         req = urllib.request.Request(sep_rpc, data=body,
@@ -213,7 +226,13 @@ def main():
         print(f"[{'PASS' if c4 else 'FAIL'}] leg1 tampered outputHash returns false (fail-closed)")
         ok &= c4
     except Exception as e:
-        print(f"[SKIP] leg1 live verify() unreachable ({e}) — local recomputes above still stand; not a pass")
+        # BUG (found in code review, fixed here): this used to print [SKIP] and fall
+        # through WITHOUT clearing `ok` -- if the RPC failed, the script still printed
+        # "ALL CHECKS PASS", silently skipping exactly the on-chain checks this PR's
+        # own title claims to close. Fail-closed instead: a network failure here is a
+        # failed verification, not a skip.
+        print(f"[FAIL] leg1 live verify() unreachable ({e}) — on-chain checks could not run, not a pass")
+        ok = False
 
     print()
     print("ALL CHECKS PASS" if ok else "SOME CHECKS FAILED")
