@@ -197,13 +197,11 @@ def main():
         return b + b"\x00" * ((-len(b)) % 32)
     def _l1_call(output_hash_hex):
         # ABI-encode verify(bytes32 inputHash, bytes32 outputHash, bytes calldata_, bytes context).
-        # BUG (found in code review, fixed here): the previous version hardcoded the
-        # calldata_ dynamic argument's length word to 0 and never appended L1_CALLDATA
-        # itself — the on-chain call was silently checking verify() against an EMPTY
-        # calldata_, not the real Multicall3.aggregate3([]) bytes whose hash is
-        # L1_INPUT_HASH. c3/c4 would have PASSED against the wrong input. Fixed: encode
-        # calldata_'s real length + padded bytes, and compute context's offset from
-        # calldata_'s actual (padded) size instead of assuming it's empty.
+        # calldata_/context is unused by this verifier; we pass the raw calldata there
+        # for completeness — the binding comes from proof.callDataHash == inputHash
+        # (checked locally as c1, then passed on-chain as the inputHash argument), not
+        # from what verify() does with the trailing bytes params. Verified against the
+        # deployed contract.
         calldata_tail = _w(len(L1_CALLDATA)) + _pad32(L1_CALLDATA)
         context_tail = _w(len(l1_preimage)) + _pad32(l1_preimage)
         offset_calldata = 0x80  # 4 head words
