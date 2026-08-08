@@ -53,7 +53,7 @@
         "did": "did:web:getagentid.dev:agent:independence_demo_001"
       },
       "evidence_basis": {
-        "authority_ref": "sha256:cc3abfb02934b3cc2c91016b3a817d582a72a36d3a53ac65693bd5e5c4ce6aa8",
+        "authority_ref": "sha256:61d3f48e3eae660254948a05ee798fed5ed68b4e3cda91dd0325cd4fad773300",
         "session_epoch": 7,
         "rotation_chain_intact": true,
         "evidenceType": "continuity-observation"
@@ -63,7 +63,7 @@
       "proof": {
         "type": "Ed25519Signature2020",
         "verificationMethod": "did:web:issuer-b.example#key-1",
-        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..f0kMiiMA5KMRgW7TvGboVyAmGPYT364M9oVk4ec5DxK0yzzIfDxKph_vTmSR3DohBwF5cPX61Neqi8_WyBGUBw"
+        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..mcwXThCKhT5Xlgu9p-Kw2HT-K5zLCIw-Lu4Zxf2y7X8PzEsRRUJu_a9_38-lM2dIHa1trjiHsPqIzVJYIcCGAw"
       }
     }
   },

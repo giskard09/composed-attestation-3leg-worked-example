@@ -28,6 +28,13 @@ matches its declared `expected_independence.rubric_verdict`.
 | `valid-composition.json` | **PASS** | B is content-addressed-bound to A via `authority_ref`; no plaintext copy. |
 | `copy-with-binding.json` | **PASS** | B carries a plaintext `granted_scope` copy **and** a resolving `authority_ref`. The R4 permitted case (decision 5). |
 | `laundered-authority.json` | **FAIL** | B inlines a **bare** plaintext copy of A's grant with **no** `authority_ref`. Laundering. The rubric must catch it. |
+| `or-composition-scope-boundary.json` | **FAIL** (documented) | An honest **disjunctive** OR-composition (two same-type authorities, either sufficient) that the rubric's single-slot R3 quantification misfires on. The **documented scope boundary** (rubric §2), not a defect: `verify.py`'s corrected `r3_over_minimal_sufficient_sets` PASSes it. |
+| `cross-suite-binding.json` | n/a (artifact) | The CTEF side of a two-suite composition (rubric §9). `verify.py` recomputes the authority's action-ref v2 binding hash from its own preimage; the co-suite leg is a stub naming what the other suite must sign. |
+
+`authority_ref` uses argentum's **action-ref v2** domain-separation tag (`mycelium.action-ref:v2:`
+prepended to the JCS preimage before SHA-256); the signature digest stays raw JCS. Run
+`python3 generate_fixtures.py --check` to regenerate every fixture in memory and diff it against the
+committed bytes (exit nonzero on any drift).
 
 ## `valid-composition.json` — independence HOLDS (rubric PASS)
 
@@ -63,11 +70,32 @@ B's word as authoritative and permits while A is present.
 - Verifier verdict: **FAIL** — and `verify.py` exits 0 because failing this fixture is the
   *correct, expected* behavior.
 
-## Why the triple is the whole point
+## `or-composition-scope-boundary.json` — the disjunctive scope boundary (documented FAIL)
+
+Two authority slots (`authority_x` from issuer A, `authority_y` from issuer C) grant the same scope
+to the same subject; **either alone suffices**. This is a legitimate OR-composition — honest
+redundancy, not laundering. But the rubric's R3 quantifies over **each single gating slot** ("drop X
+⇒ composite MUST deny"), which is correct only for **conjunctive** compositions. Applied here it
+misfires: drop `authority_x` and the composite still permits via `authority_y` (and vice versa), so
+R3-single-slot never flips and reports laundering. `verify.py` prints both the misfiring single-slot
+result **and** the corrected `r3_over_minimal_sufficient_sets` (which PASSes), so the FAIL reads as a
+scope demonstration. It exists so no one lifts the rubric to a disjunctive format without restating
+R3 over minimal sufficient sets first (rubric §2).
+
+## `cross-suite-binding.json` — independence across signature suites (rubric §9)
+
+The CTEF `authority` leg plus its recomputed action-ref v2 `authority_binding_hash`. A co-suite leg
+(e.g. BIP340/Schnorr) binds to it by embedding that hash **verbatim inside its own signed preimage**;
+a verifier confirms the binding by recomputing the hash from the CTEF preimage alone, never verifying
+CTEF's signature — so independence spans suites. `verify.py` runs the CTEF-side recomputation today;
+the co-suite leg is named as `NEEDED_FROM_CO_SUITE`.
+
+## Why the set is the whole point
 
 `valid` and `laundered` are byte-identical except for how B references A: a **content-addressed
 hash inside B's signature** (valid) vs. a **bare duplicated plaintext field B asserts about
 itself** (laundered). `copy-with-binding` sits between them: it carries *both*, and passes,
 proving the rule is precisely "copy is fine iff a resolving binding hash is also present."
-The drop-one-signature test surfaces the difference mechanically — no reviewer has to trust
-anyone's prose about what the composition "means."
+`or-composition-scope-boundary` marks the edge of the rule's remit — where the conjunctive R3
+stops applying. The drop-one-signature test surfaces every one of these mechanically — no reviewer
+has to trust anyone's prose about what the composition "means."

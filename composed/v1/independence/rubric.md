@@ -7,9 +7,11 @@ content-addressed; substrate maintained at `agentgraph-co/agentgraph`).
 **Normative CTEF reference:** **CTEF v0.3.2** (settled). v0.3.3 is additive, backward-compatible
 and maintainer-approved, but is marked CTEF-scoped with cross-spec pieces still in flight, so this
 rubric pins to the settled 0.3.2 as its normative reference.
-**Companion artifacts (in `composed/v1/`):** `valid-composition.json`,
-`laundered-authority.json`, `copy-with-binding.json`, `verify.py` (issuer-neutral verifier),
-`generate_fixtures.py` (reproducible signer).
+**Companion artifacts (in `composed/v1/independence/`):** `valid-composition.json`,
+`laundered-authority.json`, `copy-with-binding.json`, `or-composition-scope-boundary.json`
+(the disjunctive scope boundary, §2), `cross-suite-binding.json` (the cross-suite CTEF side, §9),
+`verify.py` (issuer-neutral verifier), `generate_fixtures.py` (reproducible signer; `--check`
+regenerates and diffs).
 
 ---
 
@@ -41,15 +43,28 @@ decides it mechanically.
   a BIP340/Schnorr or ECDSA `proof` verified against a published key satisfies the same clause.
 - **Preimage** — a slot's proof-stripped body, canonicalized with **RFC 8785 (JCS)**. The
   bytes a signature is computed over, and the bytes a hash addresses.
-- **Binding hash** — `sha256:` + lowercase-hex SHA-256 of a slot's JCS preimage. This is how
-  one leg **content-addresses** another (`evidence_basis.authority_ref`). `authority_ref` is
-  **content-addressed only**: it is the plain SHA-256 of the referenced slot's JCS preimage,
-  computed with **no domain-separation prefix**. Whether the lab wants a domain-separation tag on
-  this hash (an `action-ref`-style prefix) is an **open alignment item** — see §8; the rubric and
-  `verify.py` deliberately do not hard-code one.
+- **Binding hash** — `sha256:` + lowercase-hex SHA-256 that **content-addresses** a slot's JCS
+  preimage; this is how one leg names another (`evidence_basis.authority_ref`). The hash is
+  **domain-separated** with argentum's `action-ref` v2 tag: it is
+  `SHA-256( "mycelium.action-ref:v2:" ‖ JCS(preimage) )`, adopted per §8 item 1 (the argentum
+  `action-ref:v2` tag, tagged/live at commit `96931c9`). The tag scopes only the content-address;
+  the slot **signature** preimage is unchanged (raw JCS, no tag), so signing still matches this
+  repo's CTEF substrate. `generate_fixtures.py` and `verify.py` compute this identically.
 - **Gating slot** — a slot the composite decision depends on (`expected_composite.gating_slots`).
 - **Composite passes** — every gating slot verifies AND every content-addressed dependency
   resolves to a present, independently-verified slot (see R5). Operationally: `permit`.
+- **Conjunctive vs. disjunctive scope.** *This rubric applies to conjunctive compositions* —
+  every gating slot must verify, and R3 quantifies over each single gating slot. That AND-shape is
+  carried here by the envelope: `slots` is keyed by `claim_type`, so two same-type slots cannot
+  coexist and a disjunctive composition (either of several authorities suffices) is
+  unrepresentable, so R3 cannot misfire. **A format that permits disjunctive slots (either of
+  several authorities suffices) needs R3 restated over minimal sufficient sets rather than single
+  slots**: on an honest OR-composition the single-slot quantification flags legitimate redundancy
+  as laundering (drop either authority, the other still permits, so the honest OR fails R3).
+  `or-composition-scope-boundary.json` is the worked example — an honest OR that the single-slot
+  R3 FAILs by construction, while `verify.py`'s `r3_over_minimal_sufficient_sets` (the corrected
+  quantification) PASSes it. Restating R3 for the disjunctive case is future work; it is called out
+  here so no one lifts the rubric across that boundary silently.
 
 A composed envelope opts into this rubric by declaring
 `"independence_profile": "ctef-independence-v0"`.
@@ -154,10 +169,14 @@ A fixture is conformant under `ctef-independence-v0` iff:
 `verify.py` prints each requirement's result and the drop-one-signature experiment, then
 emits `PASS`/`FAIL`. The suite's own expectation is stored per fixture in
 `expected_independence.rubric_verdict`; the verifier's exit code is 0 iff every fixture's
-computed verdict matches its declared expectation. The three-fixture suite pins all three
-verdicts at once: `valid-composition.json` PASSes (binding, no copy), `copy-with-binding.json`
-PASSes (copy **plus** resolving binding — the R4 permitted case), and
-`laundered-authority.json` is correctly FAILed (bare copy, no binding).
+computed verdict matches its declared expectation. The suite pins every verdict at once:
+`valid-composition.json` PASSes (binding, no copy), `copy-with-binding.json` PASSes (copy **plus**
+resolving binding — the R4 permitted case), `laundered-authority.json` is correctly FAILed (bare
+copy, no binding), and `or-composition-scope-boundary.json` is correctly FAILed as the **documented
+disjunctive scope boundary** (§2): an honest OR-composition on which the single-slot R3
+quantification misfires — `verify.py` prints both the misfiring single-slot result and the corrected
+`r3_over_minimal_sufficient_sets` PASS, so the FAIL reads as a scope demonstration, not a defect.
+`verify.py` additionally runs the cross-suite recomputation check for `cross-suite-binding.json` (§9).
 
 ## 6. Mapping to CTEF's existing negative-path vocabulary
 
@@ -241,21 +260,58 @@ would be the very error §7.2 warns against:
 
 Same law, two layers, two levels of enforcement maturity.
 
+### 7.4 The Composed Attestation Note — R3 is its conformance test
+
+A second published artifact states this rubric's core rule normatively.
+`trustless-ai/composed-attestation-note` (a CC0 working-group note; `NOTE.md`) writes down the
+**seam rules** that let independently-produced commitments compose without any of them attesting
+for another. Two of its rules are exactly what R3 mechanizes:
+
+- **§2.1 (Single-verifier references):** *"A proof reference MUST NOT internally contain another
+  verifier's verdict."* (verbatim). The note calls the failure mode **verdict-of-verdict
+  amplification**: a consumer checking one reference believes it checked one claim while
+  transitively accepting several.
+- **§2.2 (Composition one layer up):** a combined attestation is a **separate artifact** that
+  references the legs **by hash**; its practical test is *"removing the combined artifact must not
+  invalidate any leg. If it does, composition happened inside a leg, not above it."*
+
+**R3 is the conformance test for §2.1–2.2.** The note *states* that a reference must not fold in
+another verifier's verdict; `verify.py` makes a fixture **fail** when it does. `laundered-authority.json`
+is a composition where authority was folded into a leg rather than referenced one layer up, and the
+drop-one-signature experiment is the mechanical detector: a leg whose authority is not load-bearing
+under drop is precisely a leg that internally contains another's verdict. What §2.1 forbids by
+construction, R3 catches by test; what §2.2 calls "composition inside a leg," R3 reports as
+laundering.
+
+| composed-attestation-note (`trustless-ai/composed-attestation-note`) | this rubric |
+|---|---|
+| §2.1 "a proof reference MUST NOT internally contain another verifier's verdict" | **R3** conformance test — a leg that folds in another's verdict is not load-bearing under drop-one and is reported `FAIL` |
+| §2.2 "removing the combined artifact must not invalidate any leg … else composition happened inside a leg, not above it" | **R3 + R5** — the cross-leg dependency rides a content-addressed `authority_ref` (one layer up, by hash), so dropping A fails B's dependency exactly when the composition was honest |
+| §2.4 "fail-closed negatives are required … at least one tamper test" | `laundered-authority.json` is that required negative — a green suite without it does not distinguish "verifies" from "always says yes" |
+
+The naming also converged. What this rubric calls **authority laundering**, a layering note the
+note's authors are drafting calls **upward inheritance** — an earlier layer's success read as
+authority at a later one (Echo-Merlini, review of this PR). Same defect, arrived at from a different
+direction. (Section numbers here are quoted from `NOTE.md` as fetched; "upward inheritance" is
+attributed to that in-draft layering note as described in review, not to the published note's own
+text, which uses "verdict-of-verdict amplification.")
+
 ## 8. Open alignment items (to settle with the lab / Pablo)
 
 These do not block the rubric or the fixtures from running as-is, but they are the cross-spec
 choices the lab and CTEF/argentum maintainers should ratify before partners pin to the profile.
 
-1. **`authority_ref` domain-separation prefix.** Today `authority_ref` is the plain
-   `sha256:` of the referenced slot's RFC 8785 JCS preimage, with **no domain-separation tag**.
-   A separate argentum `action-ref` line of work uses a domain-tagged preimage
-   (`mycelium.action-ref:v2:` was mentioned at commit `96931c9`); that tag is **not present in
-   this repo's CTEF substrate** (the CTEF `action_ref` preimage carries no domain prefix), so the
-   rubric does not adopt it. **Open question:** should the lab standardize a domain-separation
-   prefix for `authority_ref`, and if so which one and which spec owns it? Until settled, the
-   rubric and `verify.py` stay on the untagged content-addressed hash. Adopting a prefix later is
-   a one-line change to the preimage in `generate_fixtures.py` + `verify.py` and a regeneration;
-   no requirement (R1–R5) changes.
+1. **`authority_ref` domain-separation prefix — RESOLVED: adopts `mycelium.action-ref:v2:`.**
+   Pablo confirmed argentum's `action-ref:v2` domain-separation tag is tagged/live (commit
+   `96931c9`), so `authority_ref` now adopts it: the binding hash is
+   `SHA-256( "mycelium.action-ref:v2:" ‖ RFC 8785 JCS(preimage) )` (see §2, *Binding hash*).
+   `generate_fixtures.py` and `verify.py` compute it identically via a `binding_hash()` helper that
+   is **distinct from the signature digest** — the tag scopes only the content-address, and the
+   slot signature preimage stays raw JCS, so signing is unchanged and no requirement (R1–R5)
+   changes. The fixtures were regenerated on the tagged preimage. **Residual, to confirm with
+   argentum:** the byte layout adopted here is *tag-ASCII prepended to the JCS preimage, then
+   SHA-256*; this should be diffed byte-for-byte against argentum's `action-ref:v2` construction at
+   `96931c9` before partners pin, in case v2 tags a structured preimage rather than raw prepend.
 2. **CTEF version to cite.** This rubric pins **v0.3.2** (settled). v0.3.3 is additive,
    backward-compatible and maintainer-approved but CTEF-scoped with cross-spec pieces in flight.
    Confirm whether the lab wants the normative citation moved to 0.3.3 once its cross-spec pieces
@@ -263,3 +319,21 @@ choices the lab and CTEF/argentum maintainers should ratify before partners pin 
 3. **Profile string.** The tag is `ctef-independence-v0`. Some argentum artifacts use
    frozen-profile names like `…-v1-jcs-sha256`. Confirm the lab's preferred convention before
    partners pin to the string.
+
+## 9. Cross-suite composition (`cross-suite-binding.json`)
+
+The independence property is not tied to CTEF's signature suite. Because a leg content-addresses
+another by a **binding hash recomputed from that other leg's JCS preimage** — not by verifying its
+signature — a leg signed under a *different* suite can bind to a CTEF leg, and vice versa, and a
+verifier confirms the binding without ever verifying the far leg's signature.
+
+`cross-suite-binding.json` ships the **CTEF side** of such a two-suite composition: the Ed25519
+`authority` leg plus its recomputed `authority_binding_hash` (action-ref v2). `verify.py` recomputes
+that hash from the leg's own preimage and confirms the match — the check a co-suite leg's author
+runs with no CTEF keys in hand. The artifact also names, as `co_suite_leg` with status
+`NEEDED_FROM_CO_SUITE`, exactly what the other suite must produce: a leg (e.g. BIP340/Schnorr, as in
+`trustless-ai/cross-reference-console`) that embeds this `authority_ref` **verbatim inside its own
+signed preimage**. Once that leg exists, the full composition is a `composed-v1` envelope over both
+legs; dropping the CTEF authority makes the co-suite leg's `authority_ref` stop resolving, so R3
+holds **across suites**. The CTEF half is complete and reproducible today; only the co-suite leg's
+signed artifact is outstanding.

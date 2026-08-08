@@ -14,10 +14,22 @@ authority-laundering one:
   * laundered-authority.json  ⇒ drop A ⇒ composite PERMIT ⇒ rubric FAIL (caught)
   * copy-with-binding.json    ⇒ plaintext copy + resolving authority_ref ⇒ PASS
                                 (R4 pragmatic middle: copy permitted iff bound)
+  * or-composition-scope-boundary.json ⇒ honest DISJUNCTIVE (OR) composition; the
+                                rubric's single-slot R3 quantification MISFIRES and
+                                reports FAIL. Documented scope boundary, not a defect:
+                                R3 restated over minimal sufficient sets PASSes it.
+
+It also runs a cross-suite check (Task C): it recomputes the CTEF authority's
+action-ref v2 binding hash from its own preimage, showing the binding a co-suite
+leg would content-address is recomputable independently of the signature suite.
+
+`authority_ref` is the action-ref v2 domain-separated binding hash
+(``mycelium.action-ref:v2:`` prepended to the JCS preimage before SHA-256); the
+signature digest stays raw JCS.
 
 Exit code 0 iff every fixture's computed rubric verdict matches its declared
 ``expected_independence.rubric_verdict`` (i.e. the rubric behaved as specified,
-INCLUDING correctly failing the negative fixture).
+INCLUDING correctly failing the negative fixture AND the documented OR boundary).
 
 Run:  python3 verify.py
 """
@@ -36,6 +48,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 FIX = Path(__file__).parent  # composed/v1/ — fixtures sit alongside this script
 
+# action-ref v2 domain-separation tag for the `authority_ref` binding hash
+# (argentum, tagged/live at commit 96931c9). Applied to the content-address only;
+# the signature digest below stays raw JCS (matches this repo's CTEF substrate).
+ACTION_REF_V2_TAG = b"mycelium.action-ref:v2:"
+
 
 # --- crypto helpers (mirror generate_fixtures.py / envelope_v2.py) ------------
 
@@ -49,7 +66,15 @@ def canonical(payload: dict) -> bytes:
 
 
 def payload_hash(payload: dict) -> str:
+    """Raw SHA-256 of the JCS preimage — the SIGNATURE digest (no domain tag)."""
     return "sha256:" + hashlib.sha256(canonical(payload)).hexdigest()
+
+
+def binding_hash(payload: dict) -> str:
+    """action-ref v2 domain-separated content address used for `authority_ref`:
+    SHA-256( ACTION_REF_V2_TAG + JCS(proof-stripped payload) ). Distinct from the
+    signature digest so the tag scopes the binding without changing how slots sign."""
+    return "sha256:" + hashlib.sha256(ACTION_REF_V2_TAG + canonical(payload)).hexdigest()
 
 
 def pubkey_from_jwk(jwk: dict) -> Ed25519PublicKey:
@@ -100,9 +125,11 @@ GRANT_COPY_FIELDS = ("granted_scope",)
 
 
 def _present_verified_hashes(env: dict) -> set:
+    """binding hashes (action-ref v2 domain-separated) of present, verified slots —
+    the value space `authority_ref` resolves against."""
     jwks = env.get("jwks", {})
     return {
-        payload_hash(s) for s in env["slots"].values()
+        binding_hash(s) for s in env["slots"].values()
         if verify_slot_signature(s, jwks)
     }
 
@@ -150,7 +177,7 @@ def composite_decision(env: dict, drop: Optional[str] = None) -> str:
     slots = {k: v for k, v in env["slots"].items() if k != drop}
     jwks = env.get("jwks", {})
     verified_hashes = {
-        payload_hash(v) for v in slots.values() if verify_slot_signature(v, jwks)
+        binding_hash(v) for v in slots.values() if verify_slot_signature(v, jwks)
     }
     gating = env["expected_composite"]["gating_slots"]
     for name in gating:
@@ -163,6 +190,64 @@ def composite_decision(env: dict, drop: Optional[str] = None) -> str:
         if ref is not None and ref not in verified_hashes:
             return "deny"
     return "permit"
+
+
+# --- disjunctive (OR) composite + the scope-boundary quantifications ----------
+# These support the or-composition-scope-boundary.json fixture (Echo-Merlini's
+# scope finding). The rubric's R3 text quantifies over EACH single gating slot,
+# which is correct for conjunctive compositions only. On a disjunctive (OR)
+# composition the honest composite permits iff ANY declared sufficient set fully
+# verifies — and then the single-slot quantification misfires. We compute BOTH the
+# single-slot R3 (which FAILs the honest OR — the documented boundary) and the
+# corrected R3-over-minimal-sufficient-sets (which PASSes it).
+
+def _slot_load_bearing(slot: dict, verified_hashes: set, jwks: dict) -> bool:
+    if not verify_slot_signature(slot, jwks):
+        return False
+    ref = slot.get("evidence_basis", {}).get("authority_ref")
+    if ref is not None and ref not in verified_hashes:
+        return False
+    return True
+
+
+def _set_satisfied(names, slots: dict, jwks: dict) -> bool:
+    """A slot-set is 'sufficient' iff it is non-empty and every named slot is
+    present and load-bearing (verifies + its authority_ref, if any, resolves)."""
+    if not names:
+        return False
+    verified_hashes = {
+        binding_hash(v) for v in slots.values() if verify_slot_signature(v, jwks)
+    }
+    return all(
+        n in slots and _slot_load_bearing(slots[n], verified_hashes, jwks)
+        for n in names
+    )
+
+
+def disjunctive_decision(env: dict, drop: Optional[str] = None) -> str:
+    """Honest OR composite: permit iff SOME declared sufficient set fully verifies."""
+    slots = {k: v for k, v in env["slots"].items() if k != drop}
+    jwks = env.get("jwks", {})
+    for suff in env["expected_composite"]["sufficient_sets"]:
+        if _set_satisfied(suff, slots, jwks):
+            return "permit"
+    return "deny"
+
+
+def r3_over_minimal_sufficient_sets(env: dict) -> bool:
+    """The corrected R3 for disjunctive compositions: independence is checked WITHIN
+    each minimal sufficient set, not across the disjunction. A set launders iff some
+    member can be dropped and the set stays sufficient (that member was not
+    load-bearing for its set). An honest OR of singleton authorities passes: dropping
+    the sole member of a singleton set leaves the empty set, which is not sufficient."""
+    slots = env["slots"]
+    jwks = env.get("jwks", {})
+    for suff in env["expected_composite"]["sufficient_sets"]:
+        for member in suff:
+            reduced = [x for x in suff if x != member]
+            if _set_satisfied(reduced, slots, jwks):
+                return False  # member not load-bearing within its set -> within-set launder
+    return True
 
 
 def laundering_detected(env: dict) -> bool:
@@ -231,15 +316,66 @@ def rubric_verdict(env: dict) -> str:
         "R4_no_bare_selfassert": r4_no_bare_selfassert(env),
         "R5_content_addressing": r5_content_addressing(env),
     }
-    # R3: independence. Compute the honest composite with and without each leg.
+    # A disjunctive (OR) composition declares sufficient_sets; the honest composite
+    # is the OR rule. Otherwise the conjunctive honest composite applies.
+    disjunctive = "sufficient_sets" in env["expected_composite"]
+    decide = disjunctive_decision if disjunctive else composite_decision
+    # R3: independence via the rubric's single-slot quantification — drop EACH
+    # gating slot and require the honest composite to flip to deny.
     drop_flips = {}
     for name in env["expected_composite"]["gating_slots"]:
-        drop_flips[name] = composite_decision(env, drop=name)
+        drop_flips[name] = decide(env, drop=name)
     independence_holds = all(v == "deny" for v in drop_flips.values())
     launder = laundering_detected(env)
     checks["R3_drop_one_signature_fails"] = independence_holds and not launder
     verdict = "PASS" if all(checks.values()) else "FAIL"
-    return verdict, checks, drop_flips, launder
+    extra = {}
+    if disjunctive:
+        # The scope boundary: the single-slot R3 above misfires on an honest OR;
+        # the corrected quantification (over minimal sufficient sets) does not.
+        extra["disjunctive"] = True
+        extra["r3_over_minimal_sufficient_sets"] = (
+            "PASS" if r3_over_minimal_sufficient_sets(env) else "FAIL"
+        )
+    return verdict, checks, drop_flips, launder, extra
+
+
+def cross_suite_check() -> bool:
+    """Task C: recompute the CTEF authority's binding hash from its own preimage and
+    confirm it matches the artifact's declared value — the CTEF side of a two-suite
+    composition, verifiable without any co-suite artifacts. Returns True on match."""
+    fn = "cross-suite-binding.json"
+    path = FIX / fn
+    if not path.exists():
+        return True  # optional artifact; nothing to check
+    art = json.loads(path.read_text())
+    authority = art["ctef_authority"]
+    jwks_kid = authority["proof"]["verificationMethod"]
+    # The co-suite leg needs only the recomputed binding hash — NOT CTEF's signature.
+    recomputed = binding_hash(authority)
+    declared = art["authority_binding_hash"]
+    match = recomputed == declared
+    # Independently confirm the CTEF authority itself verifies (R1) for completeness.
+    sig_ok = verify_slot_signature(authority, {jwks_kid: _jwk_of(art, jwks_kid)})
+    print(f"\n=== {fn} (cross-suite, Task C) ===")
+    print(f"  recomputed authority binding hash matches declared: "
+          f"{'ok' if match else 'MISMATCH'}")
+    print(f"  CTEF authority signature verifies independently (R1): "
+          f"{'ok' if sig_ok else 'FAIL'}")
+    print(f"  co-suite leg: {art['co_suite_leg']['status']} "
+          f"(must embed authority_ref = {declared})")
+    return match and sig_ok
+
+
+def _jwk_of(artifact: dict, kid: str) -> dict:
+    """Locate the JWK for kid inside the cross-suite artifact's embedded authority."""
+    # The cross-suite artifact ships the authority leg; its key rides in the parent
+    # fixtures' jwks. Recompute from the authority's own public material is not
+    # possible, so we accept the leg's kid and pull the matching jwk if present.
+    for src in (artifact.get("jwks", {}),):
+        if kid in src:
+            return src[kid]
+    return {}
 
 
 def main() -> int:
@@ -247,21 +383,31 @@ def main() -> int:
         "valid-composition.json",
         "laundered-authority.json",
         "copy-with-binding.json",
+        "or-composition-scope-boundary.json",
     ]
     all_ok = True
     for fn in files:
         env = json.loads((FIX / fn).read_text())
-        verdict, checks, drop_flips, launder = rubric_verdict(env)
+        verdict, checks, drop_flips, launder, extra = rubric_verdict(env)
         expected = env["expected_independence"]["rubric_verdict"]
         ok = verdict == expected
         all_ok = all_ok and ok
-        print(f"\n=== {fn} ===")
+        boundary = env["expected_independence"].get("scope_boundary")
+        label = "  [SCOPE BOUNDARY — documented FAIL, not a defect]" if boundary else ""
+        print(f"\n=== {fn} ==={label}")
         for k, v in checks.items():
             print(f"  {k}: {'ok' if v else 'FAIL'}")
         print(f"  honest composite drop-experiment: {drop_flips}")
         print(f"  laundering_detected: {launder}")
+        if extra.get("disjunctive"):
+            print(f"  R3 single-slot quantification (rubric text): "
+                  f"{'holds' if checks['R3_drop_one_signature_fails'] else 'MISFIRES on honest OR'}")
+            print(f"  R3 over minimal sufficient sets (corrected): "
+                  f"{extra['r3_over_minimal_sufficient_sets']}")
         print(f"  rubric verdict: {verdict}  (expected {expected})  "
               f"-> {'OK' if ok else 'MISMATCH'}")
+    cross_ok = cross_suite_check()
+    all_ok = all_ok and cross_ok
     print("\n" + ("ALL FIXTURES BEHAVED AS SPECIFIED" if all_ok
                    else "RUBRIC DID NOT BEHAVE AS SPECIFIED"))
     return 0 if all_ok else 1

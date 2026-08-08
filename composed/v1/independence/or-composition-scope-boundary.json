@@ -4,7 +4,7 @@
   "subject_did": "did:web:getagentid.dev:agent:independence_demo_001",
   "issued_at": "2026-08-01T00:10:00.000Z",
   "slots": {
-    "authority": {
+    "authority_x": {
       "@context": [
         "https://www.w3.org/ns/credentials/v2",
         "https://agentgraph.co/ns/trust-evidence/v1"
@@ -40,34 +40,40 @@
         "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..Iv5SuSZA_BXIWyRn2LWKWVmQsPI3vWY2_WMVkWakCg9Vfqx47I8X9-h0CdrKGTHqB9WyD4xIbIvigbJHdpU0CQ"
       }
     },
-    "continuity": {
+    "authority_y": {
       "@context": [
         "https://www.w3.org/ns/credentials/v2",
         "https://agentgraph.co/ns/trust-evidence/v1"
       ],
       "type": "TrustAttestation",
       "version": "0.3.2",
-      "claim_type": "continuity",
-      "issuer": "did:web:issuer-b.example",
+      "claim_type": "authority",
+      "issuer": "did:web:issuer-c.example",
       "subject": {
         "did": "did:web:getagentid.dev:agent:independence_demo_001"
       },
       "evidence_basis": {
-        "authority_ref": "sha256:61d3f48e3eae660254948a05ee798fed5ed68b4e3cda91dd0325cd4fad773300",
-        "granted_scope": [
-          "action:read",
-          "resource:documents"
+        "delegation_chain": [
+          {
+            "hop": 0,
+            "delegator_did": "did:aps:z6MkHumanPrincipalIndependenceDemoTwo",
+            "delegate_did": "did:web:getagentid.dev:agent:independence_demo_001",
+            "scope": [
+              "action:read",
+              "resource:documents"
+            ],
+            "not_before": "2026-08-01T00:00:00.000Z",
+            "not_after": "2026-11-01T00:00:00.000Z"
+          }
         ],
-        "session_epoch": 7,
-        "rotation_chain_intact": true,
-        "evidenceType": "continuity-observation"
+        "evidenceType": "delegation"
       },
-      "issued_at": "2026-08-01T00:05:00.000Z",
+      "issued_at": "2026-08-01T00:00:00.000Z",
       "expires_at": "2026-11-01T00:00:00.000Z",
       "proof": {
         "type": "Ed25519Signature2020",
-        "verificationMethod": "did:web:issuer-b.example#key-1",
-        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..MkyBSF-mpCyMcoAOoVx9ScY51acmcieWvq4yzophz0tzshDPYnJOuD8ekgvqM9kgGH_ebblnl_FFLFX_HloMDQ"
+        "verificationMethod": "did:web:issuer-c.example#key-1",
+        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..uDoNctL9HFLhaAJ3TjcoEK2Az9oqY-M6AL8jKEEjH4i2sydfu3p7RkWcZHTqxSN3z6X0_tRgLZOGgsqg8fkQCQ"
       }
     }
   },
@@ -80,11 +86,11 @@
       "use": "sig",
       "alg": "EdDSA"
     },
-    "did:web:issuer-b.example#key-1": {
+    "did:web:issuer-c.example#key-1": {
       "kty": "OKP",
       "crv": "Ed25519",
-      "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
-      "kid": "did:web:issuer-b.example#key-1",
+      "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+      "kid": "did:web:issuer-c.example#key-1",
       "use": "sig",
       "alg": "EdDSA"
     }
@@ -92,18 +98,25 @@
   "expected_composite": {
     "decision": "permit",
     "gating_slots": [
-      "authority",
-      "continuity"
+      "authority_x",
+      "authority_y"
     ],
-    "reasoning": "Both legs verify; B carries a convenience granted_scope copy but is content-addressed-bound to A via a resolving authority_ref."
+    "composite_semantics": "disjunctive",
+    "sufficient_sets": [
+      [
+        "authority_x"
+      ],
+      [
+        "authority_y"
+      ]
+    ],
+    "reasoning": "Two independent authorities grant the same scope to the same subject; either alone suffices (honest redundancy / OR-composition)."
   },
   "expected_independence": {
     "profile": "ctef-independence-v0",
-    "drop_authority": {
-      "composite": "deny",
-      "reason": "B's authority_ref names A's preimage hash; with A removed the ref cannot be recomputed+verified, so B's dependency is unsatisfied. The plaintext granted_scope copy is decorative \u2014 a conformant verifier reads the ref, not the copy. A is load-bearing."
-    },
-    "rubric_verdict": "PASS",
-    "note": "R4 pragmatic middle: a plaintext grant copy is permitted ONLY when accompanied by a binding authority_ref that resolves to a present, verified slot. Strip the authority_ref and this becomes laundered-authority.json (FAIL)."
+    "scope_boundary": true,
+    "rubric_verdict": "FAIL",
+    "why_fail_is_expected": "R3's single-slot quantification (drop EACH gating slot \u21d2 composite MUST deny) assumes a conjunctive composition. On this honest OR, dropping authority_x still permits via authority_y (and vice versa), so R3-single-slot does not flip and reports laundering. That is the scope boundary rubric \u00a72 now states, demonstrated concretely \u2014 not a defect in this envelope.",
+    "corrected_quantification": "R3 restated over minimal sufficient sets PASSes: within each minimal sufficient set every member is load-bearing FOR THAT SET, so no authority is laundered. verify.py computes r3_over_minimal_sufficient_sets and reports PASS."
   }
 }
