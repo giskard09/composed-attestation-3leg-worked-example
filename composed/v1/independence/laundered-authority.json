@@ -1,0 +1,108 @@
+{
+  "composition_version": "composed-v1",
+  "independence_profile": "ctef-independence-v0",
+  "subject_did": "did:web:getagentid.dev:agent:independence_demo_001",
+  "issued_at": "2026-08-01T00:10:00.000Z",
+  "slots": {
+    "authority": {
+      "@context": [
+        "https://www.w3.org/ns/credentials/v2",
+        "https://agentgraph.co/ns/trust-evidence/v1"
+      ],
+      "type": "TrustAttestation",
+      "version": "0.3.2",
+      "claim_type": "authority",
+      "issuer": "did:web:issuer-a.example",
+      "subject": {
+        "did": "did:web:getagentid.dev:agent:independence_demo_001"
+      },
+      "evidence_basis": {
+        "delegation_chain": [
+          {
+            "hop": 0,
+            "delegator_did": "did:aps:z6MkHumanPrincipalIndependenceDemo",
+            "delegate_did": "did:web:getagentid.dev:agent:independence_demo_001",
+            "scope": [
+              "action:read",
+              "resource:documents"
+            ],
+            "not_before": "2026-08-01T00:00:00.000Z",
+            "not_after": "2026-11-01T00:00:00.000Z"
+          }
+        ],
+        "evidenceType": "delegation"
+      },
+      "issued_at": "2026-08-01T00:00:00.000Z",
+      "expires_at": "2026-11-01T00:00:00.000Z",
+      "proof": {
+        "type": "Ed25519Signature2020",
+        "verificationMethod": "did:web:issuer-a.example#key-1",
+        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..Iv5SuSZA_BXIWyRn2LWKWVmQsPI3vWY2_WMVkWakCg9Vfqx47I8X9-h0CdrKGTHqB9WyD4xIbIvigbJHdpU0CQ"
+      }
+    },
+    "continuity": {
+      "@context": [
+        "https://www.w3.org/ns/credentials/v2",
+        "https://agentgraph.co/ns/trust-evidence/v1"
+      ],
+      "type": "TrustAttestation",
+      "version": "0.3.2",
+      "claim_type": "continuity",
+      "issuer": "did:web:issuer-b.example",
+      "subject": {
+        "did": "did:web:getagentid.dev:agent:independence_demo_001"
+      },
+      "evidence_basis": {
+        "granted_scope": [
+          "action:read",
+          "resource:documents"
+        ],
+        "session_epoch": 7,
+        "rotation_chain_intact": true,
+        "evidenceType": "continuity-observation"
+      },
+      "issued_at": "2026-08-01T00:05:00.000Z",
+      "expires_at": "2026-11-01T00:00:00.000Z",
+      "proof": {
+        "type": "Ed25519Signature2020",
+        "verificationMethod": "did:web:issuer-b.example#key-1",
+        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIiwidHlwIjoiSldUIn0..XOMKpfBHngFkf3zsAArmqPGGEyj29igqfKrT09l2Mtzozro00aiPx-xYkF9q-5CU4kwq9WmzLVyV6HPf8_dCCw"
+      }
+    }
+  },
+  "jwks": {
+    "did:web:issuer-a.example#key-1": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
+      "kid": "did:web:issuer-a.example#key-1",
+      "use": "sig",
+      "alg": "EdDSA"
+    },
+    "did:web:issuer-b.example#key-1": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+      "kid": "did:web:issuer-b.example#key-1",
+      "use": "sig",
+      "alg": "EdDSA"
+    }
+  },
+  "expected_composite": {
+    "decision": "permit",
+    "gating_slots": [
+      "authority",
+      "continuity"
+    ],
+    "reasoning": "A permissive composite reads B's inlined granted_scope as authoritative and waves the composition through while A is present."
+  },
+  "expected_independence": {
+    "profile": "ctef-independence-v0",
+    "drop_authority": {
+      "composite": "permit",
+      "reason": "B carries a self-asserted plaintext copy of A's scope with NO authority_ref binding. Removing A changes nothing the permissive composite reads, so it still permits \u2014 A's authority was laundered into B. Independence is VIOLATED."
+    },
+    "rubric_verdict": "FAIL",
+    "violated_requirement": "R4 (bare self-asserted grant copy, no binding authority_ref) and R3 (drop-one-signature \u21d2 composite MUST fail)"
+  }
+}
