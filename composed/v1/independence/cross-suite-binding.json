@@ -49,13 +49,13 @@
       "alg": "EdDSA"
     }
   },
-  "authority_binding_hash": "sha256:61d3f48e3eae660254948a05ee798fed5ed68b4e3cda91dd0325cd4fad773300",
-  "binding_construction": "sha256( b'mycelium.action-ref:v2:' + RFC8785-JCS(proof-stripped ctef_authority) ), lowercase hex, 'sha256:'-prefixed (action-ref v2).",
+  "authority_binding_hash": "sha256:e1b616adcdf6467d9de09f9aa258ddbbd4ba732ff430445fe8d10a0de774ae8a",
+  "binding_construction": "sha256( b'recomputable-evidence.independence:v1:' + RFC8785-JCS(proof-stripped ctef_authority) ), lowercase hex, 'sha256:'-prefixed.",
   "co_suite_leg": {
     "status": "NEEDED_FROM_CO_SUITE",
     "suite": "BIP340/Schnorr (secp256k1), e.g. a trustless-ai/cross-reference-console cell, OR any suite verifiable against a published key",
     "must_embed": {
-      "evidence_basis.authority_ref": "sha256:61d3f48e3eae660254948a05ee798fed5ed68b4e3cda91dd0325cd4fad773300"
+      "evidence_basis.authority_ref": "sha256:e1b616adcdf6467d9de09f9aa258ddbbd4ba732ff430445fe8d10a0de774ae8a"
     },
     "requirement": "The co-suite leg MUST embed the authority_ref above VERBATIM inside its OWN signed preimage, and be signed under its own suite. A verifier recomputes this binding hash from ctef_authority's JCS preimage alone (no Ed25519 verification needed) and requires it to equal the co-suite leg's embedded authority_ref, with the CTEF authority present and independently verified.",
     "independence_property": "Drop the CTEF authority and the co-suite leg's authority_ref no longer resolves to a present, verified slot \u2014 the composite denies. The binding is content-addressed and suite-independent: neither leg verifies the other's signature; both recompute the shared hash from public bytes."

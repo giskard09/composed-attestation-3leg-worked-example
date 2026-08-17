@@ -20,9 +20,11 @@ Produces, alongside this script (composed/v1/independence/):
   cross-suite-binding.json            — CTEF side of a two-suite composition (Task C); the co-suite leg
                                         binds to this authority by the same content-addressed hash.
 
-`authority_ref` adopts argentum's action-ref v2 domain-separation tag
-(`mycelium.action-ref:v2:`, tagged/live at commit 96931c9): the binding hash is
-SHA-256 over that tag prepended to the referenced slot's JCS preimage. The
+`authority_ref` uses this profile's own domain-separation tag,
+`recomputable-evidence.independence:v1:`: the binding hash is SHA-256 over that
+tag prepended to the referenced slot's JCS preimage. argentum's
+`mycelium.action-ref:v2:` tag (tagged/live at commit 96931c9) is the first
+implementation of this domain-separation property; see rubric.md §8 item 1. The
 Ed25519 signature preimage is unchanged (raw JCS, no tag).
 
 Run:    python3 generate_fixtures.py
@@ -53,14 +55,15 @@ KID_C = "did:web:issuer-c.example#key-1"
 
 SUBJECT = "did:web:getagentid.dev:agent:independence_demo_001"
 
-# action-ref v2 domain-separation tag for the `authority_ref` binding hash.
-# argentum's action-ref line of work tags the content-address preimage
-# (`mycelium.action-ref:v2:`, tagged/live at commit 96931c9). We adopt it for
-# `authority_ref` here: the binding hash is SHA-256 over the tag bytes prepended
-# to the referenced slot's RFC 8785 JCS preimage. This is ONLY the content-address
-# used to bind one leg to another; the Ed25519 *signature* preimage is unchanged
-# (raw JCS, no tag) so slot signing still matches this repo's CTEF substrate.
-ACTION_REF_V2_TAG = b"mycelium.action-ref:v2:"
+# This profile's own domain-separation tag for the `authority_ref` binding hash.
+# argentum's mycelium.action-ref:v2: tag (tagged/live at commit 96931c9) is the
+# first implementation of this domain-separation property; this profile reuses
+# the construction under its own, substrate-neutral tag: the binding hash is
+# SHA-256 over the tag bytes prepended to the referenced slot's RFC 8785 JCS
+# preimage. This is ONLY the content-address used to bind one leg to another;
+# the Ed25519 *signature* preimage is unchanged (raw JCS, no tag) so slot signing
+# still matches this repo's CTEF substrate.
+INDEPENDENCE_TAG = b"recomputable-evidence.independence:v1:"
 
 
 def _b64url(data: bytes) -> str:
@@ -85,13 +88,13 @@ def payload_hash(payload: dict) -> str:
 
 
 def binding_hash(payload: dict) -> str:
-    """action-ref v2 domain-separated content address, used for `authority_ref`.
+    """This profile's domain-separated content address, used for `authority_ref`.
 
-    SHA-256( ACTION_REF_V2_TAG + JCS(proof-stripped payload) ), 'sha256:'-prefixed
+    SHA-256( INDEPENDENCE_TAG + JCS(proof-stripped payload) ), 'sha256:'-prefixed
     lowercase hex. Distinct from the raw signature digest above so the tag scopes
     the binding hash without touching how slots are signed.
     """
-    return "sha256:" + hashlib.sha256(ACTION_REF_V2_TAG + canonical(payload)).hexdigest()
+    return "sha256:" + hashlib.sha256(INDEPENDENCE_TAG + canonical(payload)).hexdigest()
 
 
 def sign_slot(slot: dict, priv: Ed25519PrivateKey, kid: str) -> dict:
@@ -281,7 +284,7 @@ def build_envelopes() -> dict:
     priv_c = Ed25519PrivateKey.from_private_bytes(SEED_C)
 
     signed_a = slot_a(priv_a)
-    # action-ref v2 domain-separated binding hash of A's proof-stripped preimage.
+    # recomputable-evidence.independence:v1 binding hash of A's proof-stripped preimage.
     authority_ref = binding_hash(signed_a)
 
     # ---- valid composition (independence holds) ------------------------------
@@ -458,7 +461,7 @@ def build_envelopes() -> dict:
     # Task C / the cross-fixture promised to Pablo. Demonstrates that the binding
     # hash is recomputable independently of the signature suite: a co-suite leg
     # (e.g. BIP340/Schnorr) content-addresses this CTEF authority by the SAME
-    # action-ref v2 domain-separated binding hash, recomputed from the CTEF
+    # recomputable-evidence.independence:v1 domain-separated binding hash, recomputed from the CTEF
     # preimage alone. We ship the CTEF side complete; the co-suite leg is a stub
     # naming exactly what the other suite must sign.
     cross_suite = {
@@ -474,8 +477,8 @@ def build_envelopes() -> dict:
         "jwks": {KID_A: _jwk(priv_a, KID_A)},
         "authority_binding_hash": authority_ref,
         "binding_construction": (
-            "sha256( b'mycelium.action-ref:v2:' + RFC8785-JCS(proof-stripped "
-            "ctef_authority) ), lowercase hex, 'sha256:'-prefixed (action-ref v2)."
+            "sha256( b'recomputable-evidence.independence:v1:' + RFC8785-JCS(proof-stripped "
+            "ctef_authority) ), lowercase hex, 'sha256:'-prefixed."
         ),
         "co_suite_leg": {
             "status": "NEEDED_FROM_CO_SUITE",
@@ -519,7 +522,7 @@ def build() -> None:
     for fn, env in envelopes.items():
         (FIX / fn).write_text(json.dumps(env, indent=2) + "\n")
         print(f"wrote {fn}")
-    print("authority_ref (action-ref v2 domain-separated binding hash of A):",
+    print("authority_ref (recomputable-evidence.independence:v1 domain-separated binding hash of A):",
           envelopes["valid-composition.json"]["slots"]["continuity"]
           ["evidence_basis"]["authority_ref"])
 

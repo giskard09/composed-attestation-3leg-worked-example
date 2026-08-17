@@ -20,12 +20,15 @@ authority-laundering one:
                                 R3 restated over minimal sufficient sets PASSes it.
 
 It also runs a cross-suite check (Task C): it recomputes the CTEF authority's
-action-ref v2 binding hash from its own preimage, showing the binding a co-suite
-leg would content-address is recomputable independently of the signature suite.
+recomputable-evidence.independence:v1 binding hash from its own preimage, showing
+the binding a co-suite leg would content-address is recomputable independently of
+the signature suite.
 
-`authority_ref` is the action-ref v2 domain-separated binding hash
-(``mycelium.action-ref:v2:`` prepended to the JCS preimage before SHA-256); the
-signature digest stays raw JCS.
+`authority_ref` is this profile's domain-separated binding hash
+(``recomputable-evidence.independence:v1:`` prepended to the JCS preimage before
+SHA-256; see rubric.md §8 item 1 — argentum's `mycelium.action-ref:v2:` tag is the
+first implementation of this domain-separation property); the signature digest
+stays raw JCS.
 
 Exit code 0 iff every fixture's computed rubric verdict matches its declared
 ``expected_independence.rubric_verdict`` (i.e. the rubric behaved as specified,
@@ -48,10 +51,12 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 FIX = Path(__file__).parent  # composed/v1/ — fixtures sit alongside this script
 
-# action-ref v2 domain-separation tag for the `authority_ref` binding hash
-# (argentum, tagged/live at commit 96931c9). Applied to the content-address only;
-# the signature digest below stays raw JCS (matches this repo's CTEF substrate).
-ACTION_REF_V2_TAG = b"mycelium.action-ref:v2:"
+# This profile's own domain-separation tag for the `authority_ref` binding hash.
+# argentum's mycelium.action-ref:v2: tag (tagged/live at commit 96931c9) is the
+# first implementation of this domain-separation property; this profile reuses the
+# construction under its own, substrate-neutral tag. Applied to the content-address
+# only; the signature digest below stays raw JCS (matches this repo's CTEF substrate).
+INDEPENDENCE_TAG = b"recomputable-evidence.independence:v1:"
 
 
 # --- crypto helpers (mirror generate_fixtures.py / envelope_v2.py) ------------
@@ -71,10 +76,10 @@ def payload_hash(payload: dict) -> str:
 
 
 def binding_hash(payload: dict) -> str:
-    """action-ref v2 domain-separated content address used for `authority_ref`:
-    SHA-256( ACTION_REF_V2_TAG + JCS(proof-stripped payload) ). Distinct from the
+    """This profile's domain-separated content address used for `authority_ref`:
+    SHA-256( INDEPENDENCE_TAG + JCS(proof-stripped payload) ). Distinct from the
     signature digest so the tag scopes the binding without changing how slots sign."""
-    return "sha256:" + hashlib.sha256(ACTION_REF_V2_TAG + canonical(payload)).hexdigest()
+    return "sha256:" + hashlib.sha256(INDEPENDENCE_TAG + canonical(payload)).hexdigest()
 
 
 def pubkey_from_jwk(jwk: dict) -> Ed25519PublicKey:
@@ -125,7 +130,7 @@ GRANT_COPY_FIELDS = ("granted_scope",)
 
 
 def _present_verified_hashes(env: dict) -> set:
-    """binding hashes (action-ref v2 domain-separated) of present, verified slots —
+    """binding hashes (recomputable-evidence.independence:v1 domain-separated) of present, verified slots —
     the value space `authority_ref` resolves against."""
     jwks = env.get("jwks", {})
     return {

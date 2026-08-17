@@ -4,9 +4,11 @@
 **Author:** Kenne Ives (founding committer).
 **Worked example:** CTEF — Composable Trust Evidence Format (Ed25519/JWS over RFC 8785 JCS,
 content-addressed; substrate maintained at `agentgraph-co/agentgraph`).
-**Normative CTEF reference:** **CTEF v0.3.2** (settled). v0.3.3 is additive, backward-compatible
-and maintainer-approved, but is marked CTEF-scoped with cross-spec pieces still in flight, so this
-rubric pins to the settled 0.3.2 as its normative reference.
+**CTEF version cited (worked example, not a normative dependency):** **CTEF v0.3.2** (settled).
+v0.3.3 is additive, backward-compatible and maintainer-approved, but is marked CTEF-scoped with
+cross-spec pieces still in flight, so this rubric cites the settled 0.3.2 for its worked example.
+The rubric's requirements (R1–R5) are stated over the spec-neutral slot/preimage/binding-hash
+abstraction in §2; CTEF is one instantiation of that abstraction, not the thing being defined.
 **Companion artifacts (in `composed/v1/independence/`):** `valid-composition.json`,
 `laundered-authority.json`, `copy-with-binding.json`, `or-composition-scope-boundary.json`
 (the disjunctive scope boundary, §2), `cross-suite-binding.json` (the cross-suite CTEF side, §9),
@@ -45,10 +47,12 @@ decides it mechanically.
   bytes a signature is computed over, and the bytes a hash addresses.
 - **Binding hash** — `sha256:` + lowercase-hex SHA-256 that **content-addresses** a slot's JCS
   preimage; this is how one leg names another (`evidence_basis.authority_ref`). The hash is
-  **domain-separated** with argentum's `action-ref` v2 tag: it is
-  `SHA-256( "mycelium.action-ref:v2:" ‖ JCS(preimage) )`, adopted per §8 item 1 (the argentum
-  `action-ref:v2` tag, tagged/live at commit `96931c9`). The tag scopes only the content-address;
-  the slot **signature** preimage is unchanged (raw JCS, no tag), so signing still matches this
+  **domain-separated** with this profile's own tag: it is
+  `SHA-256( "recomputable-evidence.independence:v1:" ‖ JCS(preimage) )` (see §8 item 1 — argentum's
+  `mycelium.action-ref:v2:` tag, tagged/live at commit `96931c9`, is the first implementation of
+  this domain-separation property; this profile adopts the construction under its own,
+  substrate-neutral tag). The tag scopes only the content-address; the slot **signature**
+  preimage is unchanged (raw JCS, no tag), so signing still matches this
   repo's CTEF substrate. `generate_fixtures.py` and `verify.py` compute this identically.
 - **Gating slot** — a slot the composite decision depends on (`expected_composite.gating_slots`).
 - **Composite passes** — every gating slot verifies AND every content-addressed dependency
@@ -301,21 +305,23 @@ text, which uses "verdict-of-verdict amplification.")
 These do not block the rubric or the fixtures from running as-is, but they are the cross-spec
 choices the lab and CTEF/argentum maintainers should ratify before partners pin to the profile.
 
-1. **`authority_ref` domain-separation prefix — RESOLVED: adopts `mycelium.action-ref:v2:`.**
-   Pablo confirmed argentum's `action-ref:v2` domain-separation tag is tagged/live (commit
-   `96931c9`), so `authority_ref` now adopts it: the binding hash is
-   `SHA-256( "mycelium.action-ref:v2:" ‖ RFC 8785 JCS(preimage) )` (see §2, *Binding hash*).
-   `generate_fixtures.py` and `verify.py` compute it identically via a `binding_hash()` helper that
-   is **distinct from the signature digest** — the tag scopes only the content-address, and the
-   slot signature preimage stays raw JCS, so signing is unchanged and no requirement (R1–R5)
-   changes. The fixtures were regenerated on the tagged preimage. **Residual, to confirm with
-   argentum:** the byte layout adopted here is *tag-ASCII prepended to the JCS preimage, then
-   SHA-256*; this should be diffed byte-for-byte against argentum's `action-ref:v2` construction at
-   `96931c9` before partners pin, in case v2 tags a structured preimage rather than raw prepend.
-2. **CTEF version to cite.** This rubric pins **v0.3.2** (settled). v0.3.3 is additive,
-   backward-compatible and maintainer-approved but CTEF-scoped with cross-spec pieces in flight.
-   Confirm whether the lab wants the normative citation moved to 0.3.3 once its cross-spec pieces
-   land.
+1. **`authority_ref` domain-separation prefix — RESOLVED: this profile mints its own tag,
+   `recomputable-evidence.independence:v1:`.** The binding hash is
+   `SHA-256( "recomputable-evidence.independence:v1:" ‖ RFC 8785 JCS(preimage) )` (see §2,
+   *Binding hash*). `generate_fixtures.py` and `verify.py` compute it identically via a
+   `binding_hash()` helper that is **distinct from the signature digest** — the tag scopes only
+   the content-address, and the slot signature preimage stays raw JCS, so signing is unchanged
+   and no requirement (R1–R5) changes. The fixtures were regenerated on the retagged preimage.
+   **Credit:** argentum's `mycelium.action-ref:v2:` domain-separation tag (tagged/live at commit
+   `96931c9`, confirmed by Pablo) is the first implementation of this domain-separation property
+   — the byte layout this profile's tag reuses (tag-ASCII prepended to the JCS preimage, then
+   SHA-256) is diffed byte-for-byte against it. This profile cites that construction as prior art
+   rather than adopting argentum's tag itself, so the rubric's own criterion does not carry a
+   single implementer's product name.
+2. **CTEF version cited as worked example.** This rubric cites **v0.3.2** (settled). v0.3.3 is
+   additive, backward-compatible and maintainer-approved but CTEF-scoped with cross-spec pieces
+   in flight. Confirm whether the lab wants the worked-example citation moved to 0.3.3 once its
+   cross-spec pieces land.
 3. **Profile string.** The tag is `ctef-independence-v0`. Some argentum artifacts use
    frozen-profile names like `…-v1-jcs-sha256`. Confirm the lab's preferred convention before
    partners pin to the string.
@@ -328,7 +334,7 @@ signature — a leg signed under a *different* suite can bind to a CTEF leg, and
 verifier confirms the binding without ever verifying the far leg's signature.
 
 `cross-suite-binding.json` ships the **CTEF side** of such a two-suite composition: the Ed25519
-`authority` leg plus its recomputed `authority_binding_hash` (action-ref v2). `verify.py` recomputes
+`authority` leg plus its recomputed `authority_binding_hash` (this profile's `recomputable-evidence.independence:v1:` tag, see §8 item 1). `verify.py` recomputes
 that hash from the leg's own preimage and confirms the match — the check a co-suite leg's author
 runs with no CTEF keys in hand. The artifact also names, as `co_suite_leg` with status
 `NEEDED_FROM_CO_SUITE`, exactly what the other suite must produce: a leg (e.g. BIP340/Schnorr, as in

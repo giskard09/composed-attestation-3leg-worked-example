@@ -9,8 +9,8 @@ Each fixture is a composed-v1 envelope over one subject DID, carrying two **sign
 (`authority` from issuer A, `continuity` from issuer B). Signatures are real Ed25519 detached
 compact JWS over JCS-canonical (RFC 8785) preimages, produced deterministically from fixed seeds
 by `generate_fixtures.py`. Public keys travel in each envelope's `jwks` block so the fixtures are
-self-contained and offline-verifiable. Slots declare CTEF `version: "0.3.2"` (the normative
-reference; see `../../rubric.md`).
+self-contained and offline-verifiable. Slots declare CTEF `version: "0.3.2"` (the worked-example
+version cited; see `../../rubric.md`).
 
 Recompute everything:
 
@@ -29,10 +29,12 @@ matches its declared `expected_independence.rubric_verdict`.
 | `copy-with-binding.json` | **PASS** | B carries a plaintext `granted_scope` copy **and** a resolving `authority_ref`. The R4 permitted case (decision 5). |
 | `laundered-authority.json` | **FAIL** | B inlines a **bare** plaintext copy of A's grant with **no** `authority_ref`. Laundering. The rubric must catch it. |
 | `or-composition-scope-boundary.json` | **FAIL** (documented) | An honest **disjunctive** OR-composition (two same-type authorities, either sufficient) that the rubric's single-slot R3 quantification misfires on. The **documented scope boundary** (rubric §2), not a defect: `verify.py`'s corrected `r3_over_minimal_sufficient_sets` PASSes it. |
-| `cross-suite-binding.json` | n/a (artifact) | The CTEF side of a two-suite composition (rubric §9). `verify.py` recomputes the authority's action-ref v2 binding hash from its own preimage; the co-suite leg is a stub naming what the other suite must sign. |
+| `cross-suite-binding.json` | n/a (artifact) | The CTEF side of a two-suite composition (rubric §9). `verify.py` recomputes the authority's binding hash from its own preimage; the co-suite leg is a stub naming what the other suite must sign. |
 
-`authority_ref` uses argentum's **action-ref v2** domain-separation tag (`mycelium.action-ref:v2:`
-prepended to the JCS preimage before SHA-256); the signature digest stays raw JCS. Run
+`authority_ref` uses this profile's own domain-separation tag
+(`recomputable-evidence.independence:v1:` prepended to the JCS preimage before SHA-256; argentum's
+`mycelium.action-ref:v2:` tag is the first implementation of this domain-separation property, see
+rubric.md §8 item 1); the signature digest stays raw JCS. Run
 `python3 generate_fixtures.py --check` to regenerate every fixture in memory and diff it against the
 committed bytes (exit nonzero on any drift).
 
@@ -84,7 +86,7 @@ R3 over minimal sufficient sets first (rubric §2).
 
 ## `cross-suite-binding.json` — independence across signature suites (rubric §9)
 
-The CTEF `authority` leg plus its recomputed action-ref v2 `authority_binding_hash`. A co-suite leg
+The CTEF `authority` leg plus its recomputed `authority_binding_hash`. A co-suite leg
 (e.g. BIP340/Schnorr) binds to it by embedding that hash **verbatim inside its own signed preimage**;
 a verifier confirms the binding by recomputing the hash from the CTEF preimage alone, never verifying
 CTEF's signature — so independence spans suites. `verify.py` runs the CTEF-side recomputation today;
