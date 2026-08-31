@@ -300,6 +300,14 @@ direction. (Section numbers here are quoted from `NOTE.md` as fetched; "upward i
 attributed to that in-draft layering note as described in review, not to the published note's own
 text, which uses "verdict-of-verdict amplification.")
 
+**Credit on the rubric's spine.** Framing R1–R5 as **testable requirements a fixture can FAIL,
+not prose** (§1), and the drop-one-signature negative that exists precisely so a green suite
+distinguishes "verifies" from "always says yes" (§2.4 above), is the **prove-can-fail principle**
+Pavlo Tvardovskyi (`@pipavlo82`) and Echo-Merlini were circling in earlier recompute work —
+*"a `False` you've never seen return `True` is not evidence."* It is a general principle, so no
+single artifact owns it, but it sits alongside the trustless-ai citations above as the third
+independent line converging on the same discipline (Echo-Merlini, review of this PR).
+
 ## 8. Open alignment items (to settle with the lab / Pablo)
 
 These do not block the rubric or the fixtures from running as-is, but they are the cross-spec
