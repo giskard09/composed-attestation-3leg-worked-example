@@ -48,6 +48,17 @@ class Unreachable(Exception):
     """A remote source could not be queried (not: it answered and refuted)."""
 
 
+class Reverted(Unreachable):
+    """The RPC answered: the call reverted. A determinate answer, not a transport
+    failure. Callers that can interpret a revert catch this first; anywhere else it
+    still reads as could-not-query (Unreachable), so no other check changes."""
+
+
+class NoData(Exception):
+    """The RPC answered an eth_call with empty data ("0x"): there is no contract
+    code at the address, or nothing there answers the call. A determinate negative."""
+
+
 def _fetch(req):
     """urlopen with bounded retry on transient failures (429, 5xx, timeout,
     connection errors). Raises Unreachable when all attempts fail."""
@@ -76,6 +87,9 @@ def _rpc(url, method, params):
         resp = json.loads(raw)
     except ValueError as e:
         raise Unreachable(f"non-JSON RPC response: {e}")
+    err = resp.get("error") if isinstance(resp, dict) else None
+    if isinstance(err, dict) and (err.get("code") == 3 or "revert" in str(err.get("message", "")).lower()):
+        raise Reverted(f"execution reverted: {str(err)[:120]}")
     if not isinstance(resp, dict) or "result" not in resp:
         raise Unreachable(f"RPC returned no result: {str(resp)[:120]}")
     return resp["result"]
@@ -276,25 +290,51 @@ def main():
         head = (bytes.fromhex(L1_INPUT_HASH) + bytes.fromhex(output_hash_hex)
                 + _w(offset_calldata) + _w(offset_context))
         data = "0x" + (sel + head + calldata_tail + context_tail).hex()
-        return int(_rpc(sep_rpc, "eth_call", [{"to": L1_CONTRACT, "data": data}, "latest"]), 16)
+        res = _rpc(sep_rpc, "eth_call", [{"to": L1_CONTRACT, "data": data}, "latest"])
+        if res in ("0x", ""):
+            raise NoData("eth_call returned no data")
+        return int(res, 16)
     if args.no_network:
         emit("INCONCLUSIVE", "leg1 live verify() + tampered-output negative not run (--no-network)")
     else:
+        # An answer the RPC gave is classified as an answer: empty data (no code at the
+        # address) or a revert on the bound input is FAIL, not "could not be queried".
+        # Only transport failures and unusable responses are INCONCLUSIVE.
+        bound = f"leg1 live verify() on {L1_CONTRACT} (Sepolia)"
+        queried = True   # False only when the RPC could not be reached at all
         try:
             r3 = _l1_call(L1_COMMITMENT)
-            tampered = L1_COMMITMENT[:-1] + ("b" if L1_COMMITMENT[-1] != "b" else "c")
-            r4 = _l1_call(tampered)
+        except NoData:
+            emit("FAIL", f"{bound} returned no data: no contract code at that address, or no verify() there")
+            ok = False
+        except Reverted as e:
+            emit("FAIL", f"{bound} reverted on the bound input, expected true ({e})")
+            ok = False
         except (Unreachable, ValueError, TypeError) as e:
             # The RPC could not be queried: neither a pass nor a refutation. Never
             # a pass (see summary / exit code 2), and never a silent skip.
-            emit("INCONCLUSIVE", f"leg1 live verify() on {L1_CONTRACT} (Sepolia) could not be queried ({e})")
+            emit("INCONCLUSIVE", f"{bound} could not be queried ({e})")
+            queried = False
         else:
             c3 = r3 == 1
-            emit("PASS" if c3 else "FAIL", f"leg1 live verify() on {L1_CONTRACT} (Sepolia) returns true")
+            emit("PASS" if c3 else "FAIL", f"{bound} returns true")
             ok &= c3
-            c4 = r4 == 0
-            emit("PASS" if c4 else "FAIL", "leg1 tampered outputHash returns false (fail-closed)")
-            ok &= c4
+        tampered = L1_COMMITMENT[:-1] + ("b" if L1_COMMITMENT[-1] != "b" else "c")
+        if queried:   # unreachable: one INCONCLUSIVE for leg 1, as before
+            try:
+                r4 = _l1_call(tampered)
+            except NoData:
+                emit("FAIL", "leg1 tampered outputHash: verify() returned no data (no contract code at that address)")
+                ok = False
+            except Reverted:
+                # Rejecting the tampered output by reverting is still fail-closed.
+                emit("PASS", "leg1 tampered outputHash is rejected (verify() reverts: fail-closed)")
+            except (Unreachable, ValueError, TypeError) as e:
+                emit("INCONCLUSIVE", f"leg1 tampered outputHash check could not be queried ({e})")
+            else:
+                c4 = r4 == 0
+                emit("PASS" if c4 else "FAIL", "leg1 tampered outputHash returns false (fail-closed)")
+                ok &= c4
 
     print()
     print(f"{RESULTS['PASS']} PASS, {RESULTS['FAIL']} FAIL, {RESULTS['INCONCLUSIVE']} INCONCLUSIVE")

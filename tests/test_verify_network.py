@@ -61,7 +61,7 @@ def http_err(code):
 
 class Net:
     """Scripted fake network. getlogs/sepolia are lists of actions consumed in
-    order (last one repeats): ('ok', value) | ('http', code) | ('rpcerr',)."""
+    order (last one repeats): ('ok', value) | ('http', code) | ('rpcerr',) | ('revert',)."""
     def __init__(self, getlogs=None, sepolia=None, ledger=None):
         self.getlogs = getlogs or [("ok", [good_log()])]
         self.sepolia = sepolia or [("ok", "0x1"), ("ok", "0x0")]
@@ -95,6 +95,9 @@ class Net:
             raise http_err(act[1])
         if act[0] == "rpcerr":
             return Resp(json.dumps({"error": {"code": -32005, "message": "rate limited"}}).encode())
+        if act[0] == "revert":
+            return Resp(json.dumps({"jsonrpc": "2.0", "id": 1,
+                                    "error": {"code": 3, "message": "execution reverted"}}).encode())
         if act[0] == "notjson":
             return Resp(b"<html>nope</html>")
         return Resp(json.dumps(act[1] if raw else {"result": act[1]}).encode())
@@ -222,6 +225,39 @@ class T(unittest.TestCase):
     def test_sepolia_tampered_true_is_fail(self):
         code, out = run(Net(sepolia=[("ok", "0x1"), ("ok", "0x1")]))
         self.assertEqual(code, 1, out)
+
+    # --- leg 1: the RPC answered, so its answer is classified, never "could not be queried" ---
+
+    def test_sepolia_no_code_is_fail_not_inconclusive(self):
+        # eth_call to an address with no contract code answers "0x"
+        code, out = run(Net(sepolia=[("ok", "0x")]))
+        self.assertEqual(code, 1, out)
+        self.assertIn("[FAIL] leg1 live verify()", out)
+        self.assertIn("returned no data", out)
+        self.assertNotIn("[INCONCLUSIVE] leg1", out)
+
+    def test_sepolia_bound_call_reverts_is_fail(self):
+        code, out = run(Net(sepolia=[("revert",), ("ok", "0x0")]))
+        self.assertEqual(code, 1, out)
+        self.assertIn("reverted on the bound input", out)
+
+    def test_sepolia_tampered_revert_is_fail_closed(self):
+        code, out = run(Net(sepolia=[("ok", "0x1"), ("revert",)]))
+        self.assertEqual(code, 0, out)
+        self.assertIn("[PASS] leg1 tampered outputHash is rejected", out)
+
+    def test_sepolia_non_revert_rpc_error_stays_inconclusive(self):
+        # a JSON-RPC error that is not a revert (rate limit) is still could-not-query
+        code, out = run(Net(sepolia=[("rpcerr",)]))
+        self.assertEqual(code, 2, out)
+        self.assertIn("[INCONCLUSIVE] leg1 live verify()", out)
+        self.assertEqual(out.count("[INCONCLUSIVE]"), 1, out)
+
+    def test_revert_on_base_rpc_stays_inconclusive_for_leg2(self):
+        # only leg 1 interprets a revert; leg 2's behaviour is unchanged
+        code, out = run(Net(getlogs=[("revert",)]))
+        self.assertEqual(code, 2, out)
+        self.assertIn("[INCONCLUSIVE] leg2 on-chain Anchored event", out)
 
 
 if __name__ == "__main__":
