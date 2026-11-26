@@ -67,6 +67,7 @@ class Net:
         self.sepolia = sepolia or [("ok", "0x1"), ("ok", "0x0")]
         self.ledger = ledger or [("ok", live_ledger())]
         self.calls = []
+        self.chain_id = 11155111
         self._n = {"getlogs": 0, "sepolia": 0, "ledger": 0}
 
     def _take(self, kind, script):
@@ -86,6 +87,8 @@ class Net:
             return Resp(json.dumps({"result": hex(ANCHOR["block"] + 5)}).encode())
         if m == "eth_getLogs":
             return self._act(self._take("getlogs", self.getlogs))
+        if m == "eth_chainId":
+            return Resp(json.dumps({"result": hex(self.chain_id)}).encode())
         if m == "eth_call":
             return self._act(self._take("sepolia", self.sepolia))
         raise AssertionError(m)
@@ -234,7 +237,8 @@ class T(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("[FAIL] leg1 live verify()", out)
         self.assertIn("returned no data", out)
-        self.assertNotIn("[INCONCLUSIVE] leg1", out)
+        # the bound call is classified FAIL; the control is reported as not informative
+        self.assertNotIn("[INCONCLUSIVE] leg1 live verify()", out)
 
     def test_sepolia_bound_call_reverts_is_fail(self):
         code, out = run(Net(sepolia=[("revert",), ("ok", "0x0")]))
@@ -245,6 +249,36 @@ class T(unittest.TestCase):
         code, out = run(Net(sepolia=[("ok", "0x1"), ("revert",)]))
         self.assertEqual(code, 0, out)
         self.assertIn("[PASS] leg1 tampered outputHash is rejected", out)
+
+    # --- the negative control counts only against a bound call that returned true ---
+
+    def test_both_calls_revert_control_is_not_a_pass(self):
+        code, out = run(Net(sepolia=[("revert",), ("revert",)]))
+        self.assertEqual(code, 1, out)
+        self.assertIn("[FAIL] leg1 live verify()", out)
+        self.assertIn("[INCONCLUSIVE] leg1 tampered outputHash negative control not run", out)
+        self.assertNotIn("[PASS] leg1 tampered", out)
+
+    def test_both_calls_no_code_control_is_not_a_pass(self):
+        code, out = run(Net(sepolia=[("ok", "0x"), ("ok", "0x")]))
+        self.assertEqual(code, 1, out)
+        self.assertIn("negative control not informative", out)
+        self.assertNotIn("[PASS] leg1 tampered", out)
+
+    def test_bound_false_and_tampered_false_control_is_not_a_pass(self):
+        code, out = run(Net(sepolia=[("ok", "0x0"), ("ok", "0x0")]))
+        self.assertEqual(code, 1, out)
+        self.assertIn("negative control not informative", out)
+        self.assertNotIn("[PASS] leg1 tampered", out)
+
+    def test_wrong_chain_rpc_is_inconclusive_not_no_contract(self):
+        net = Net(sepolia=[("ok", "0x"), ("ok", "0x")])
+        net.chain_id = 1
+        code, out = run(net)
+        self.assertEqual(code, 2, out)
+        self.assertIn("not Sepolia", out)
+        self.assertNotIn("[FAIL] leg1", out)
+        self.assertEqual(out.count("[INCONCLUSIVE] leg1"), 1, out)
 
     def test_sepolia_non_revert_rpc_error_stays_inconclusive(self):
         # a JSON-RPC error that is not a revert (rate limit) is still could-not-query
