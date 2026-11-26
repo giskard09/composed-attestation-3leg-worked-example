@@ -301,8 +301,14 @@ def main():
         # address) or a revert on the bound input is FAIL, not "could not be queried".
         # Only transport failures and unusable responses are INCONCLUSIVE.
         bound = f"leg1 live verify() on {L1_CONTRACT} (Sepolia)"
-        queried = True   # False only when the RPC could not be reached at all
+        queried = True   # False when the RPC could not be reached, or is not Sepolia
+        bound_true = False   # the negative control below is informative only if this is True
         try:
+            # An RPC for another network answers "0x" for an address that has code on
+            # Sepolia; that must not be read as "no contract". Check the chain first.
+            chain = int(_rpc(sep_rpc, "eth_chainId", []), 16)
+            if chain != 11155111:
+                raise Unreachable(f"RPC is on chain id {chain}, not Sepolia (11155111)")
             r3 = _l1_call(L1_COMMITMENT)
         except NoData:
             emit("FAIL", f"{bound} returned no data: no contract code at that address, or no verify() there")
@@ -319,8 +325,16 @@ def main():
             c3 = r3 == 1
             emit("PASS" if c3 else "FAIL", f"{bound} returns true")
             ok &= c3
+            bound_true = c3
         tampered = L1_COMMITMENT[:-1] + ("b" if L1_COMMITMENT[-1] != "b" else "c")
-        if queried:   # unreachable: one INCONCLUSIVE for leg 1, as before
+        if not bound_true:
+            # A rejection of the tampered input proves nothing if the bound call did not
+            # return true (a contract that reverts or returns false on everything would
+            # "reject" it too). The control counts only against a bound call that passed.
+            if queried:   # unreachable already produced its own INCONCLUSIVE
+                emit("INCONCLUSIVE", "leg1 tampered outputHash negative control not run: negative control not "
+                                     "informative because the bound call did not return true")
+        else:
             try:
                 r4 = _l1_call(tampered)
             except NoData:
